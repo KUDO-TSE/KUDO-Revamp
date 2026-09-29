@@ -199,6 +199,17 @@ label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin
 .lightbox.open{display:grid}
 .lightbox img{max-height:90vh;border-radius:8px}
 
+.ws-sec{margin-bottom:34px}
+.ws-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;padding:14px 0 12px;border-top:6px solid var(--c);margin-bottom:14px}
+.ws-head h2{font-size:1.3rem}
+.ws-sec.interfaces{--c:var(--ws-a)} .ws-sec.backend{--c:var(--ws-b)} .ws-sec.gtm{--c:var(--ws-c)}
+.masters{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:16px}
+.masters .master{margin:0;background:var(--surface);border:1px solid var(--line)}
+.masters .docicon::after{border-color:var(--surface) var(--surface) rgba(255,255,255,.35) rgba(255,255,255,.35)}
+.icard .docicon{background:var(--c)}
+.ws-sec .icard .docicon::after{border-color:var(--surface) var(--surface) rgba(255,255,255,.35) rgba(255,255,255,.35)}
+.sec-docs h4{margin:6px 0 0;font-size:.8rem;color:var(--muted);font-weight:600}
+.sec-docs .doc-row{padding:6px 0}
 /* gtm */
 .dept-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
 .dept-tab{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;cursor:pointer;text-align:left;min-width:150px}
@@ -335,6 +346,7 @@ function rebuild(){
   for (const n of Object.keys(SORTS)) { S[n] = Object.entries(RAW[n]).map(([id,v]) => ({...v, id})); S[n].sort(SORTS[n]); }
   S.status = RAW.status.current || null;
   S.team = RAW.settings.team?.names || [];
+  S.structure = RAW.settings.structure?.sections || {};
   S.loaded = true;
 }
 let pendingRender = false;
@@ -372,8 +384,15 @@ function people(){
   S.gtm.forEach(g => g.owner && set.add(g.owner));
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
+const DEFAULT_SECTIONS = {interfaces:["Interpreter Interface","Operator Interface","Participant Interface","Viewer Interface","Producer Interface"], backend:["LS & MS Dashboard"]};
+function sections(ws){
+  const base = (S.structure && S.structure[ws]) || DEFAULT_SECTIONS[ws] || [];
+  const extra = new Set();
+  [...S.docs, ...S.meetings, ...S.actions, ...S.interfaces].forEach(x => { if (x.workstream===ws && x.category && !base.includes(x.category)) extra.add(x.category); });
+  return [...base, ...[...extra].sort()];
+}
 function categories(ws){
-  const set = new Set();
+  const set = new Set(ws ? sections(ws) : [...sections("interfaces"), ...sections("backend")]);
   [...S.docs, ...S.meetings, ...S.actions, ...S.interfaces].forEach(x => { if (x.category && (!ws || x.workstream===ws)) set.add(x.category); });
   return [...set].sort();
 }
@@ -388,18 +407,17 @@ const isOver = a => a.due && a.status!=="done" && a.due < today();
 /* ---------- nav & routing ---------- */
 const VIEWS = [
   ["overview","Where we stand"],
-  ["docs","Documents"],
+  ["project","Project overview"],
   ["actions","Action items"],
   ["meetings","Meetings"],
-  ["interfaces","Interfaces"],
   ["gtm","Go-to-market"],
 ];
 function renderNav(){
-  const counts = {docs:S.docs.length, actions:openActions().length, meetings:S.meetings.length, interfaces:S.interfaces.length, gtm: S.gtm.filter(g=>g.status!=="done").length};
+  const counts = {project:S.docs.length+S.interfaces.length, actions:openActions().length, meetings:S.meetings.length, interfaces:S.interfaces.length, gtm: S.gtm.filter(g=>g.status!=="done").length};
   $("#nav").innerHTML = VIEWS.map(([k,l]) => `<a href="#${k}" ${UI.view===k?'aria-current="page"':""}><span>${l}</span>${counts[k]!=null?`<span class="count">${counts[k]}</span>`:""}</a>`).join("");
 }
-window.addEventListener("hashchange", () => { const v = location.hash.slice(1).split("/")[0]; if (VIEWS.some(x=>x[0]===v)) { UI.view=v; render(); $("#main").focus({preventScroll:true}); window.scrollTo(0,0);} });
-{ const v = location.hash.slice(1).split("/")[0]; if (VIEWS.some(x=>x[0]===v)) UI.view=v; }
+window.addEventListener("hashchange", () => { let v = location.hash.slice(1).split("/")[0]; if (v==="docs"||v==="interfaces") v="project"; if (VIEWS.some(x=>x[0]===v)) { UI.view=v; render(); $("#main").focus({preventScroll:true}); window.scrollTo(0,0);} });
+{ let v = location.hash.slice(1).split("/")[0]; if (v==="docs"||v==="interfaces") { v="project"; history.replaceState(null,"","#project"); } if (VIEWS.some(x=>x[0]===v)) UI.view=v; }
 function go(view, patch){ Object.assign(UI, patch||{}); if (location.hash !== "#"+view) location.hash = view; else { UI.view=view; render(); } }
 
 function render(){
@@ -408,14 +426,14 @@ function render(){
   let banner = "";
   if (dbState==="offline") banner = `<div class="banner">The dashboard server could not be reached. Check your connection and reload the page.</div>`;
   if (dbState==="loading" && !S.loaded) { m.innerHTML = `<div class="empty"><span class="spinner"></span> Loading the program data</div>`; return; }
-  const fn = {overview:vOverview, docs:vDocs, actions:vActions, meetings:vMeetings, interfaces:vInterfaces, gtm:vGtm}[UI.view] || vOverview;
+  const fn = {overview:vOverview, project:vProject, actions:vActions, meetings:vMeetings, gtm:vGtm}[UI.view] || vOverview;
   m.innerHTML = banner + fn();
   bind(m);
 }
 
 /* ---------- overview ---------- */
 function stationsFor(ws){
-  const cats = categories(ws);
+  const cats = sections(ws);
   return cats.map(c => {
     const reviewed = S.meetings.some(m => m.workstream===ws && m.category===c);
     const open = S.actions.filter(a => a.category===c && a.status!=="done").length;
@@ -510,22 +528,46 @@ function handleSampleErr(e){
 }
 
 /* ---------- documents ---------- */
-function vDocs(){
-  const cols = ["backend","interfaces","gtm"].filter(ws => ws!=="gtm" || S.docs.some(d=>d.workstream==="gtm"));
-  return `<div class="view-head"><div><h2>Documents</h2><p>Every document for the revamp, grouped by workstream, category and sub-category. Import a document's comments to turn open threads into action items.</p></div>
-    <button class="btn primary" data-act="add-doc">Add document</button></div>
-  <div class="doc-cols">${cols.map(ws => {
+function ifaceStatusChip(i){ const si = IFACE_STATUS.indexOf(i.status); return `<span class="chip ${si>=3?"ok":si>=1?"warn":""}">${esc(i.status||"Concept")}</span>`; }
+function vProject(){
+  const wss = ["interfaces","backend"].concat(S.docs.some(d=>d.workstream==="gtm") ? ["gtm"] : []);
+  return `<div class="view-head"><div><h2>Project overview</h2><p>Every part of the revamp in one place: the master documents, then each section with its current interface artifact, its documents and its open action items.</p></div>
+    <div class="row"><button class="btn" data-act="add-doc">Add document</button><button class="btn primary" data-act="add-iface">Add interface</button></div></div>
+  ${wss.map(ws => {
     const docs = S.docs.filter(d => d.workstream===ws);
     const masters = docs.filter(d => d.kind==="Master document");
-    const rest = docs.filter(d => d.kind!=="Master document");
-    const byCat = {};
-    rest.forEach(d => { const c=d.category||"General"; (byCat[c] ||= {}); const s=d.subcategory||""; (byCat[c][s] ||= []).push(d); });
-    return `<section class="doc-col ${ws}"><header><h3>${WS[ws].label}</h3><span class="muted small">${docs.length} document${docs.length===1?"":"s"}</span></header>
-      ${masters.map(d=>`<div class="master"><span class="docicon"></span><div class="t" style="flex:1;min-width:0"><div class="small muted">Master document</div>${docRow(d,true)}</div></div>`).join("")}
-      ${Object.keys(byCat).sort().map(c => `<div class="cat"><h3>${esc(c)}</h3>${Object.keys(byCat[c]).sort().map(s => `<div class="${s?"sub":""}">${s?`<h4>${esc(s)}</h4>`:""}${byCat[c][s].map(d=>`<div class="doc-row"><span class="docicon small"></span><div class="t">${docRow(d)}</div></div>`).join("")}</div>`).join("")}</div>`).join("")}
-      ${!docs.length?`<div class="empty">No documents yet.</div>`:""}
+    const secs = ws==="gtm" ? [...new Set(docs.filter(d=>d.kind!=="Master document").map(d=>d.category||"General"))] : sections(ws);
+    const loose = docs.filter(d => d.kind!=="Master document" && !d.category);
+    if (loose.length && !secs.includes("General")) secs.push("General");
+    const reviewed = secs.filter(c => S.meetings.some(m=>m.workstream===ws && m.category===c)).length;
+    return `<section class="ws-sec ${ws}">
+      <header class="ws-head"><div><h2>${WS[ws].label}</h2><span class="muted small">${secs.length} section${secs.length===1?"":"s"}, ${reviewed} reviewed in a meeting, ${docs.length} document${docs.length===1?"":"s"}</span></div>
+        ${ws!=="gtm"?`<button class="btn sm ghost" data-act="add-section" data-ws="${ws}">Add section</button>`:""}</header>
+      ${masters.length ? `<div class="masters">${masters.map(d=>`<div class="master"><span class="docicon"></span><div class="t" style="flex:1;min-width:0"><div class="small muted">Master document</div>${docRow(d,true)}</div></div>`).join("")}</div>` : ""}
+      <div class="gallery">${secs.map(c => sectionCard(ws, c)).join("")}</div>
     </section>`;
-  }).join("")}</div>`;
+  }).join("")}`;
+}
+function sectionCard(ws, c){
+  const ifs = S.interfaces.filter(i => i.workstream===ws && (i.category||"General")===c);
+  const main = ifs.find(i=>i.imageUrl) || ifs[0];
+  const docs = S.docs.filter(d => d.workstream===ws && d.kind!=="Master document" && (d.category||"General")===c);
+  const bySub = {}; docs.forEach(d => (bySub[d.subcategory||""] ||= []).push(d));
+  const open = S.actions.filter(a => a.category===c && a.status!=="done").length;
+  const meets = S.meetings.filter(m => m.workstream===ws && m.category===c);
+  return `<article class="icard">
+    ${main?.imageUrl ? `<button class="shot" data-zoom="${esc(main.imageUrl)}" aria-label="Enlarge ${esc(main.name)} preview"><img src="${esc(main.imageUrl)}" alt="${esc(main.name)} preview" loading="lazy"></button>` : `<div class="shot none">No interface preview yet</div>`}
+    <div class="body">
+      <div class="row"><h3>${esc(c)}</h3><span class="spacer"></span>${main ? ifaceStatusChip(main) : `<span class="chip">Not started</span>`}</div>
+      ${main?.description?`<p>${esc(main.description)}</p>`:""}
+      ${ifs.length ? `<div class="row small">${ifs.map(i=>`${i.artifactUrl?`<a class="btn sm primary" href="${esc(i.artifactUrl)}" target="_blank" rel="noopener">Open ${ifs.length>1?esc(i.name):"artifact"}</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(i.id)}">Edit${ifs.length>1?" "+esc(i.name):" interface"}</button>`).join("")}</div>` : ""}
+      <div class="row small">${open?`<a href="#actions" data-go-cat="${esc(c)}">${open} open action${open===1?"":"s"}</a>`:`<span class="muted">No open actions</span>`}${meets.length?`<a href="#meetings" data-open-meeting="${esc(meets[0].id)}">${meets.length} meeting${meets.length===1?"":"s"}</a>`:""}</div>
+      <div class="sec-docs">${docs.length ? Object.keys(bySub).sort().map(sub => `${sub?`<h4>${esc(sub)}</h4>`:""}${bySub[sub].map(d=>`<div class="doc-row"><span class="docicon small"></span><div class="t">${docRow(d)}</div></div>`).join("")}`).join("") : `<p class="small muted" style="margin:0">No documents yet.</p>`}</div>
+      <div class="row" style="margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">
+        <button class="btn sm" data-act="add-doc-in" data-ws="${ws}" data-cat="${esc(c)}">Add document</button>
+        ${!ifs.length ? `<button class="btn sm" data-act="add-iface-in" data-ws="${ws}" data-cat="${esc(c)}">Add interface</button>` : ""}
+      </div>
+    </div></article>`;
 }
 function docRow(d, master){
   const open = S.actions.filter(a => a.source?.docId===d.id && a.status!=="done").length;
@@ -882,23 +924,6 @@ function summaryText(m){
 }
 
 /* ---------- interfaces ---------- */
-function vInterfaces(){
-  return `<div class="view-head"><div><h2>Interfaces</h2><p>The current Claude artifact for each interface in the revamp. Open the artifact to try it, or tap the preview to enlarge it.</p></div>
-    <button class="btn primary" data-act="add-iface">Add interface</button></div>
-  <div class="gallery">${S.interfaces.map(i => {
-    const open = S.actions.filter(a => a.category && a.category===i.category && a.status!=="done").length;
-    const docs = S.docs.filter(d => d.category && d.category===i.category);
-    const si = IFACE_STATUS.indexOf(i.status);
-    return `<article class="icard">
-      ${i.imageUrl ? `<button class="shot" data-zoom="${esc(i.imageUrl)}" aria-label="Enlarge ${esc(i.name)} preview"><img src="${esc(i.imageUrl)}" alt="${esc(i.name)} preview" loading="lazy"></button>` : `<div class="shot none">No preview yet</div>`}
-      <div class="body">
-        <div class="row"><h3>${esc(i.name)}</h3><span class="spacer"></span>${wsChip(i.workstream)}</div>
-        ${i.description?`<p>${esc(i.description)}</p>`:""}
-        <div class="row small"><span class="chip ${si>=3?"ok":si>=1?"warn":""}">${esc(i.status||"Concept")}</span>${open?`<a href="#actions" data-go-cat="${esc(i.category)}">${open} open action${open===1?"":"s"}</a>`:""}${docs.map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.subcategory||d.title)}</a>`).join("")}</div>
-        <div class="row" style="margin-top:auto;padding-top:6px">${i.artifactUrl?`<a class="btn sm primary" href="${esc(i.artifactUrl)}" target="_blank" rel="noopener">Open artifact</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(i.id)}">Edit</button></div>
-      </div></article>`;
-  }).join("") || `<div class="panel empty">No interfaces yet.</div>`}</div>`;
-}
 function ifaceForm(i){
   i = i || {workstream:"interfaces", status:"In design"};
   openModal(i.id?"Edit interface":"Add interface", `<div class="stack">
@@ -950,6 +975,17 @@ function gtmForm(g){
   if (g.id) $("#g_del").onclick = async () => { if (confirm("Delete this consideration?")) { if (await remove("gtm", g.id)) { closeModal(); toast("Deleted"); } } };
 }
 
+function addSection(ws){
+  openModal(`Add a section to ${WS[ws].label}`, `<div><label class="f" for="sec_n">Section name</label><input type="text" id="sec_n" placeholder="e.g. Admin Interface"></div>`,
+    `<button class="btn" data-close>Cancel</button><button class="btn primary" id="sec_save">Add section</button>`);
+  $("#sec_save").onclick = async () => {
+    const n = $("#sec_n").value.trim(); if (!n) return toast("Name the section first.");
+    const all = {...DEFAULT_SECTIONS, ...(S.structure||{})};
+    if ((all[ws]||[]).includes(n)) return toast("That section already exists.");
+    all[ws] = [...(all[ws]||[]), n];
+    if (await write("settings", "structure", {sections: all})) { closeModal(); toast("Section added"); }
+  };
+}
 /* ---------- modal ---------- */
 function openModal(title, body, foot){
   const m = $("#modal");
@@ -979,6 +1015,9 @@ function bind(root){
       case "edit-meeting": meetingForm(find("meetings")); break;
       case "copy-summary": { const t = summaryText(find("meetings")); (navigator.clipboard?.writeText(t) || Promise.reject()).then(()=>toast("Summary copied"), ()=>{ openModal("Copy summary", `<textarea rows="16" id="cpy">${esc(t)}</textarea>`, `<button class="btn" data-close>Close</button>`); $("#cpy").select(); }); break; }
       case "add-iface": ifaceForm(); break;
+      case "add-doc-in": docForm({workstream:el.dataset.ws, category:el.dataset.cat, kind:"Review document"}); break;
+      case "add-iface-in": ifaceForm({workstream:el.dataset.ws, category:el.dataset.cat, status:"Concept", name:el.dataset.cat}); break;
+      case "add-section": addSection(el.dataset.ws); break;
       case "edit-iface": ifaceForm(find("interfaces")); break;
       case "add-gtm": gtmForm(); break;
       case "edit-gtm": gtmForm(find("gtm")); break;

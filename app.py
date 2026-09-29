@@ -119,6 +119,33 @@ def seed_missing():
                 added += 1
     if added:
         app.logger.warning("Seeded %s records from initial-data.json", added)
+    run_migrations()
+
+
+# One-off data changes, each applied once and recorded in settings/migrations.
+MIGRATIONS = {
+    "2026-09-interface-sections": [
+        ("interfaces", "ifc-producer", "category", "Producer Console", "Producer Interface"),
+        ("interfaces", "ifc-operator", "category", "Operator Console", "Operator Interface"),
+    ],
+}
+
+
+def run_migrations():
+    log = get_record("settings", "migrations") or {"done": []}
+    changed = False
+    for name, steps in MIGRATIONS.items():
+        if name in log["done"]:
+            continue
+        for col, rid, field, old, new in steps:
+            rec = get_record(col, rid)
+            if rec is not None and rec.get(field) == old:
+                rec[field] = new
+                put_record(col, rid, rec, "Update")
+        log["done"].append(name)
+        changed = True
+    if changed:
+        put_record("settings", "migrations", log, "Update")
 
 
 
