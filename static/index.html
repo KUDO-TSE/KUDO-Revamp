@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KUDO Revamp - Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650;12..96,760&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --paper:#EEF2F5; --surface:#FFFFFF; --sunk:#E3E9EE; --ink:#0E2F45; --text:#16283A; --muted:#5A6B7B; --line:#D3DCE3;
+  --signal:#F4C430; --signal-ink:#3A2C00;
+  --ws-a:#2B78B6; --ws-a-soft:#DCEBF7; --ws-b:#B45D26; --ws-b-soft:#F6E4D8; --ws-c:#6B5AA8; --ws-c-soft:#E7E3F4;
+  --ok:#2C8457; --ok-soft:#DDF1E5; --warn:#A87200; --warn-soft:#FBEFD0; --bad:#B83A34; --bad-soft:#F8DEDC;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --r-sm:6px; --r-md:10px; --r-lg:16px;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0A1B27; --surface:#10283A; --sunk:#0D2231; --ink:#E8F0F6; --text:#DCE6EE; --muted:#91A6B7; --line:#1F3B51;
+    --ws-a:#6AAEE4; --ws-a-soft:#15324A; --ws-b:#E39360; --ws-b-soft:#3A2515; --ws-c:#A898E4; --ws-c-soft:#262143;
+    --ok:#5CC08A; --ok-soft:#133526; --warn:#E6B444; --warn-soft:#3A2D0B; --bad:#EE7A73; --bad-soft:#3E1917;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0A1B27; --surface:#10283A; --sunk:#0D2231; --ink:#E8F0F6; --text:#DCE6EE; --muted:#91A6B7; --line:#1F3B51;
+  --ws-a:#6AAEE4; --ws-a-soft:#15324A; --ws-b:#E39360; --ws-b-soft:#3A2515; --ws-c:#A898E4; --ws-c-soft:#262143;
+  --ok:#5CC08A; --ok-soft:#133526; --warn:#E6B444; --warn-soft:#3A2D0B; --bad:#EE7A73; --bad-soft:#3E1917;
+  color-scheme: dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--paper);color:var(--text);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:var(--ws-a)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2.5px solid var(--signal);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--display);color:var(--ink);margin:0;letter-spacing:-.01em}
+h2{font-size:1.55rem;font-weight:650}
+h3{font-size:1.08rem;font-weight:650}
+.muted{color:var(--muted)}
+.small{font-size:.86rem}
+
+/* shell */
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.side{background:#0E2F45;color:#DDE8F0;padding:22px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:20px}
+:root[data-theme="dark"] .side{background:#071520}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .side{background:#071520}}
+.brand{padding:0 8px}
+.brand b{display:block;font:760 1.35rem/1 var(--display);color:#fff;letter-spacing:-.02em}
+.brand span{display:block;margin-top:6px;font-size:.8rem;color:#9FB6C8}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-radius:8px;color:#C9D8E4;text-decoration:none;font-weight:500}
+.nav a:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav a[aria-current="page"]{background:var(--signal);color:var(--signal-ink);font-weight:650}
+.nav .count{font-size:.78rem;opacity:.8}
+.side-foot{margin-top:auto;font-size:.78rem;color:#8AA3B6;padding:0 8px;display:flex;flex-direction:column;gap:8px}
+.side-foot button{background:none;border:1px solid rgba(255,255,255,.2);color:#C9D8E4;border-radius:6px;padding:6px 8px;cursor:pointer;text-align:left}
+main{padding:28px clamp(16px,3vw,40px) 60px;min-width:0}
+.view-head{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
+.view-head p{margin:4px 0 0;color:var(--muted);max-width:68ch}
+.banner{background:var(--warn-soft);color:var(--text);border:1px solid var(--warn);padding:10px 14px;border-radius:var(--r-md);margin-bottom:18px;font-size:.9rem}
+
+/* controls */
+.btn{text-decoration:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.9rem;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--signal);border-color:var(--signal);color:var(--signal-ink)}
+.btn.primary:hover{filter:brightness(.96)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.danger{color:var(--bad);border-color:var(--bad-soft)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:.82rem}
+input[type=text],input[type=date],input[type=url],input[type=search],select,textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{resize:vertical;min-height:90px}
+label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin-bottom:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stack>*+*{margin-top:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:.76rem;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.chip.ws-interfaces{background:var(--ws-a-soft);color:var(--ws-a)}
+.chip.ws-backend{background:var(--ws-b-soft);color:var(--ws-b)}
+.chip.ws-gtm{background:var(--ws-c-soft);color:var(--ws-c)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.owner{display:inline-flex;align-items:center;gap:6px;font-size:.84rem;font-weight:600}
+.avatar{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:.66rem;font-weight:700;color:#fff;flex:none}
+
+/* overview */
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:clamp(20px,3vw,34px);margin-bottom:22px}
+.hero .eyeline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:.86rem;margin-bottom:10px}
+.hero h1{font-size:clamp(1.6rem,3.2vw,2.5rem);font-weight:760;line-height:1.1;max-width:26ch;letter-spacing:-.025em}
+.hero .overall{font-size:1.04rem;max-width:72ch;margin:14px 0 0;line-height:1.65}
+.tracks{margin-top:28px;display:flex;flex-direction:column;gap:22px}
+.track{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:start}
+.track-name{font:650 .95rem/1.25 var(--display);color:var(--ink);padding-top:2px}
+.track-name small{display:block;font:500 .78rem var(--body);color:var(--muted);margin-top:3px}
+.rail{position:relative;display:flex;gap:0;overflow-x:auto;padding-bottom:4px}
+.station{flex:1 0 132px;position:relative;padding-top:26px;cursor:pointer;background:none;border:0;text-align:left;padding-right:10px}
+.station::before{content:"";position:absolute;top:8px;left:0;right:0;height:4px;background:var(--line)}
+.station:first-child::before{left:9px}
+.station:last-child::before{right:auto;width:9px}
+.station .dot{position:absolute;top:1px;left:0;width:18px;height:18px;border-radius:50%;border:4px solid var(--c);background:var(--surface);z-index:1}
+.station.reviewed .dot{background:var(--c)}
+.station.reviewed::before{background:var(--c)}
+.station b{display:block;font-size:.88rem;color:var(--ink);line-height:1.25}
+.station span{display:block;font-size:.76rem;color:var(--muted);margin-top:2px}
+.station:hover b{text-decoration:underline}
+.track.interfaces{--c:var(--ws-a)} .track.backend{--c:var(--ws-b)} .track.gtm{--c:var(--ws-c)}
+.ws-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:22px}
+.ws-card{border-left:4px solid var(--c);padding:4px 0 4px 14px}
+.ws-card.interfaces{--c:var(--ws-a)} .ws-card.backend{--c:var(--ws-b)} .ws-card.gtm{--c:var(--ws-c)}
+.ws-card p{margin:6px 0 0;font-size:.92rem}
+.ws-card .next{font-size:.86rem;color:var(--muted);margin-top:6px}
+.lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:18px}
+.panel h3{margin-bottom:10px}
+.panel ul{margin:0;padding-left:18px}
+.panel li+li{margin-top:6px}
+.stats{display:flex;gap:28px;flex-wrap:wrap;margin:22px 0 0;padding-top:18px;border-top:1px solid var(--line)}
+.stat b{font:760 1.6rem/1 var(--display);color:var(--ink)}
+.stat span{display:block;font-size:.8rem;color:var(--muted);margin-top:4px}
+.bar{height:8px;background:var(--sunk);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok);border-radius:99px}
+
+/* documents */
+.doc-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
+.doc-col{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.doc-col>header{padding:16px 18px;border-top:6px solid var(--c);display:flex;justify-content:space-between;gap:10px;align-items:center}
+.doc-col.interfaces{--c:var(--ws-a)} .doc-col.backend{--c:var(--ws-b)} .doc-col.gtm{--c:var(--ws-c)}
+.master{margin:0 18px 14px;padding:14px;border-radius:var(--r-md);background:var(--sunk);display:flex;gap:12px;align-items:flex-start}
+.docicon{width:34px;height:42px;flex:none;border-radius:4px;background:var(--c);position:relative}
+.docicon::after{content:"";position:absolute;top:0;right:0;border-width:0 10px 10px 0;border-style:solid;border-color:var(--sunk) var(--sunk) rgba(255,255,255,.35) rgba(255,255,255,.35)}
+.docicon.small{width:24px;height:30px}
+.cat{padding:4px 18px 14px}
+.cat>h3{font-size:.98rem;display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-top:1px solid var(--line)}
+.sub{margin-left:12px;padding-left:14px;border-left:2px solid var(--line)}
+.sub h4{margin:10px 0 4px;font-size:.84rem;color:var(--muted);font-weight:600}
+.doc-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0}
+.doc-row .t{flex:1;min-width:0}
+.doc-row a.title{font-weight:600;color:var(--ink);text-decoration:none;word-break:break-word}
+.doc-row a.title:hover{text-decoration:underline}
+.doc-meta{font-size:.78rem;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
+
+/* actions */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.filters select,.filters input{width:auto;min-width:140px}
+.filters input[type=search]{flex:1;min-width:180px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:7px 12px;cursor:pointer;font-weight:600;font-size:.86rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.alist{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md)}
+.aitem{display:grid;grid-template-columns:28px 1fr auto;gap:12px;padding:12px 16px;border-top:1px solid var(--line);align-items:start}
+.aitem:first-child{border-top:0}
+.aitem.done .atitle{text-decoration:line-through;color:var(--muted)}
+.check{width:22px;height:22px;border-radius:6px;border:2px solid var(--muted);background:none;cursor:pointer;display:grid;place-items:center;margin-top:1px;padding:0}
+.check.on{background:var(--ok);border-color:var(--ok)}
+.check.on::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.atitle{font-weight:600;color:var(--ink)}
+.adetail{font-size:.88rem;color:var(--muted);margin-top:2px}
+.ameta{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center}
+.due.over{color:var(--bad);font-weight:700}
+.group-h{padding:10px 16px;background:var(--sunk);font-weight:650;font-size:.88rem;display:flex;justify-content:space-between;border-top:1px solid var(--line)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+
+/* meetings */
+.meet-layout{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+.meet-list{display:flex;flex-direction:column;gap:8px}
+.meet-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;cursor:pointer;text-align:left;width:100%}
+.meet-card[aria-current="true"]{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--signal)}
+.meet-card b{display:block;color:var(--ink);font-size:.94rem}
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:clamp(18px,2.5vw,30px)}
+.summary h3{font-size:1.12rem;margin:22px 0 8px}
+.summary h3:first-of-type{margin-top:6px}
+.summary p{margin:0;max-width:78ch}
+.summary ul{margin:0;padding-left:20px;max-width:78ch}
+.summary li{margin:6px 0}
+.summary li ul{margin-top:4px}
+
+/* interfaces */
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.icard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;display:flex;flex-direction:column}
+.shot{aspect-ratio:16/10;background:var(--sunk);border:0;padding:0;cursor:zoom-in;display:block;width:100%;overflow:hidden;border-bottom:1px solid var(--line)}
+.shot img{width:100%;height:100%;object-fit:cover;object-position:top left}
+.shot.none{display:grid;place-items:center;cursor:default;color:var(--muted);font-size:.86rem}
+.icard .body{padding:14px 16px;display:flex;flex-direction:column;gap:8px;flex:1}
+.icard .body p{margin:0;font-size:.9rem;color:var(--muted)}
+.lightbox{position:fixed;inset:0;background:rgba(5,15,22,.86);display:none;place-items:center;z-index:60;padding:24px;cursor:zoom-out}
+.lightbox.open{display:grid}
+.lightbox img{max-height:90vh;border-radius:8px}
+
+/* gtm */
+.dept-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.dept-tab{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;cursor:pointer;text-align:left;min-width:150px}
+.dept-tab[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 -3px 0 var(--signal)}
+.dept-tab b{display:block;font-size:.92rem;color:var(--ink)}
+.dept-tab .bar{margin-top:8px}
+.phases{display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
+.phase h3{font-size:.95rem;display:flex;justify-content:space-between;align-items:baseline;padding-bottom:8px;border-bottom:3px solid var(--ws-c);margin-bottom:10px}
+.phase h3 small{font:500 .76rem var(--body);color:var(--muted)}
+.gitem{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;margin-bottom:10px}
+.gitem.done{opacity:.72}
+.gitem .q{font-weight:650;color:var(--ink);font-size:.92rem;line-height:1.35}
+.gitem .g{font-size:.84rem;color:var(--muted);margin-top:6px}
+.gitem .gfoot{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.st{border:1px solid var(--line);background:none;border-radius:999px;padding:2px 9px;font-size:.74rem;font-weight:600;cursor:pointer;color:var(--muted)}
+.st[aria-pressed="true"].todo{background:var(--sunk);color:var(--text)}
+.st[aria-pressed="true"].doing{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.st[aria-pressed="true"].done{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+
+/* modal */
+dialog{border:0;border-radius:var(--r-lg);padding:0;background:var(--surface);color:var(--text);width:min(760px,94vw);max-height:90vh;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(6,18,28,.55)}
+.m-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:0;background:var(--surface);z-index:2}
+.m-body{padding:18px 22px;overflow:auto}
+.m-foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:0;background:var(--surface)}
+.drop{border:2px dashed var(--line);border-radius:var(--r-md);padding:22px;text-align:center;color:var(--muted);cursor:pointer}
+.drop.over{border-color:var(--signal);background:var(--sunk)}
+.comment{border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.88rem}
+.comment+.comment{margin-top:8px}
+.comment q{display:block;color:var(--muted);font-size:.8rem;margin-bottom:4px;quotes:none;border-left:3px solid var(--signal);padding-left:8px}
+.comment.resolved{opacity:.55}
+.reply{margin:6px 0 0 14px;padding-left:10px;border-left:2px solid var(--line)}
+.prop{display:grid;grid-template-columns:24px 1fr 170px;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.prop:first-child{border-top:0}
+.spinner{display:inline-block;width:16px;height:16px;border:2.5px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spinner{animation-duration:3s}}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:80;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{position:sticky;top:env(safe-area-inset-top,0px);height:auto;flex-direction:row;align-items:center;padding:10px 12px;gap:10px;z-index:20;overflow-x:auto}
+  .brand span,.side-foot{display:none}
+  .brand b{font-size:1rem;white-space:nowrap}
+  .nav{flex-direction:row}
+  .nav a{white-space:nowrap;padding:7px 10px}
+  .nav .count{display:none}
+  .meet-layout{grid-template-columns:1fr}
+  .track{grid-template-columns:1fr}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .prop{grid-template-columns:24px 1fr}
+  .prop>:last-child{grid-column:2}
+  .aitem{grid-template-columns:28px 1fr}
+  .aitem>.aside{grid-column:2}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><b>KUDO Revamp</b><span>Interfaces and Ops backend program</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <div id="whoami"></div>
+      <div>Internal and confidential. Share only with KUDO team members.</div>
+      <button id="importBtn" type="button">Import data file</button><input type="file" id="importFile" accept=".json" hidden>
+      <a id="exportBtn" href="/api/export" style="color:#C9D8E4;font-size:.78rem">Download a backup</a>
+      <button id="themeBtn" type="button">Switch theme</button>
+      <a href="/logout" style="color:#C9D8E4;font-size:.78rem">Sign out</a>
+    </div>
+  </aside>
+  <main id="main" tabindex="-1"></main>
+</div>
+<dialog id="modal"></dialog>
+<div class="lightbox" id="lightbox"><img alt=""></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+const WS = {
+  interfaces: {label:"Interface revamp", short:"Interfaces"},
+  backend: {label:"Ops backend (MS & LS)", short:"Ops backend"},
+  gtm: {label:"Go-to-market", short:"Go-to-market"},
+};
+const PHASES = ["Now","Alpha","Beta","Launch","Post-launch"];
+const DEPTS = ["Sales","Client Managers","Operations","Marketing","Technical Support","Launch governance"];
+const IFACE_STATUS = ["Concept","In design","In review","Approved","In build","Released"];
+const S = {docs:[],actions:[],meetings:[],interfaces:[],gtm:[],status:null,team:[],loaded:false};
+const UI = {view:"overview", af:{status:"open",owner:"",ws:"",cat:"",q:"",group:"owner"}, meeting:null, dept:"Sales"};
+let db=null, sample=null, assets=null, readOnly=false, dbState="loading";
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = p => (p||"id") + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const today = () => new Date().toISOString().slice(0,10);
+const fmtDate = d => { if(!d) return ""; const x = new Date(d.length===10 ? d+"T12:00:00" : d); if (isNaN(x)) return d; return x.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}); };
+const clean = s => String(s ?? "").replace(/\s*[\u2014\u2013]\s*/g, ", ").replace(/,\s*,/g, ",");
+const hue = n => { let h=0; for (const c of String(n)) h=(h*31+c.charCodeAt(0))%360; return h; };
+const initials = n => String(n||"?").split(/[\s&]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+const ownerHtml = n => n ? `<span class="owner"><span class="avatar" style="background:hsl(${hue(n)} 45% 42%)">${esc(initials(n))}</span>${esc(n)}</span>` : `<span class="owner muted">Unassigned</span>`;
+const wsChip = w => WS[w] ? `<span class="chip ws-${w}">${esc(WS[w].short)}</span>` : "";
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
+
+/* ---------- theme ---------- */
+try { const th = localStorage.getItem("kudo-revamp-theme"); if (th) document.documentElement.dataset.theme = th; } catch(e){}
+$("#themeBtn").onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("kudo-revamp-theme", next); } catch(e){}
+};
+
+/* ---------- data layer (Railway API) ---------- */
+const RAW = {docs:{},actions:{},meetings:{},interfaces:{},gtm:{},status:{},settings:{}};
+const SORTS = {
+  docs:(a,b)=>(a.order??99)-(b.order??99) || String(a.title).localeCompare(b.title),
+  actions:(a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)),
+  meetings:(a,b)=>String(b.date||b.createdAt).localeCompare(String(a.date||a.createdAt)),
+  interfaces:(a,b)=>(a.order??99)-(b.order??99),
+  gtm:(a,b)=>(a.order??999)-(b.order??999),
+};
+async function api(method, url, body){
+  const opt = {method, credentials:"same-origin", headers:{}};
+  if (body !== undefined) { opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
+  const r = await fetch(url, opt);
+  if (r.status === 401) { location.href = "/login"; throw {code:"auth"}; }
+  if (!r.ok) { let m=""; try { m=(await r.json()).error; } catch(e){} throw {code:"http_"+r.status, message:m}; }
+  return r.status === 204 ? null : r.json();
+}
+function applyChange(c){ const col = RAW[c.collection]; if (!col) return; if (c.deleted) delete col[c.id]; else col[c.id] = c.data; }
+function rebuild(){
+  for (const n of Object.keys(SORTS)) { S[n] = Object.entries(RAW[n]).map(([id,v]) => ({...v, id})); S[n].sort(SORTS[n]); }
+  S.status = RAW.status.current || null;
+  S.team = RAW.settings.team?.names || [];
+  S.loaded = true;
+}
+let pendingRender = false;
+function safeRender(){
+  const ae = document.activeElement;
+  if (ae && $("#main").contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) { pendingRender = true; renderNav(); return; }
+  pendingRender = false; render();
+}
+document.addEventListener("focusout", () => setTimeout(() => { if (pendingRender) safeRender(); }, 150));
+async function write(col, id, data, merge){
+  try {
+    const res = await api(merge ? "PATCH" : "PUT", `/api/c/${col}/${encodeURIComponent(id)}`, data);
+    applyChange({collection:col, id, data:res.data, deleted:false}); rebuild(); render();
+    return true;
+  } catch(e){ if (e.code !== "auth") toast(e.message || "Could not save. Check your connection and try again."); return false; }
+}
+async function remove(col, id){
+  try { await api("DELETE", `/api/c/${col}/${encodeURIComponent(id)}`); applyChange({collection:col, id, deleted:true}); rebuild(); render(); return true; }
+  catch(e){ if (e.code !== "auth") toast("Could not delete. Try again."); return false; }
+}
+let cursor = null, polling = false;
+async function poll(){
+  if (polling) return; polling = true;
+  try {
+    const r = await api("GET", "/api/state" + (cursor != null ? "?since=" + cursor : ""));
+    const first = cursor == null;
+    r.changes.forEach(applyChange); cursor = r.now;
+    if (first || r.changes.length) { rebuild(); dbState = "ok"; first ? render() : safeRender(); }
+  } catch(e){ if (cursor == null && e.code !== "auth") { dbState = "offline"; S.loaded = true; render(); } }
+  finally { polling = false; }
+}
+function people(){
+  const set = new Set(S.team);
+  S.actions.forEach(a => a.owner && set.add(a.owner));
+  S.gtm.forEach(g => g.owner && set.add(g.owner));
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+function categories(ws){
+  const set = new Set();
+  [...S.docs, ...S.meetings, ...S.actions, ...S.interfaces].forEach(x => { if (x.category && (!ws || x.workstream===ws)) set.add(x.category); });
+  return [...set].sort();
+}
+function subcategories(){
+  const set = new Set();
+  [...S.docs, ...S.meetings, ...S.actions].forEach(x => x.subcategory && set.add(x.subcategory));
+  return [...set].sort();
+}
+const openActions = () => S.actions.filter(a => a.status !== "done");
+const isOver = a => a.due && a.status!=="done" && a.due < today();
+
+/* ---------- nav & routing ---------- */
+const VIEWS = [
+  ["overview","Where we stand"],
+  ["docs","Documents"],
+  ["actions","Action items"],
+  ["meetings","Meetings"],
+  ["interfaces","Interfaces"],
+  ["gtm","Go-to-market"],
+];
+function renderNav(){
+  const counts = {docs:S.docs.length, actions:openActions().length, meetings:S.meetings.length, interfaces:S.interfaces.length, gtm: S.gtm.filter(g=>g.status!=="done").length};
+  $("#nav").innerHTML = VIEWS.map(([k,l]) => `<a href="#${k}" ${UI.view===k?'aria-current="page"':""}><span>${l}</span>${counts[k]!=null?`<span class="count">${counts[k]}</span>`:""}</a>`).join("");
+}
+window.addEventListener("hashchange", () => { const v = location.hash.slice(1).split("/")[0]; if (VIEWS.some(x=>x[0]===v)) { UI.view=v; render(); $("#main").focus({preventScroll:true}); window.scrollTo(0,0);} });
+{ const v = location.hash.slice(1).split("/")[0]; if (VIEWS.some(x=>x[0]===v)) UI.view=v; }
+function go(view, patch){ Object.assign(UI, patch||{}); if (location.hash !== "#"+view) location.hash = view; else { UI.view=view; render(); } }
+
+function render(){
+  renderNav();
+  const m = $("#main");
+  let banner = "";
+  if (dbState==="offline") banner = `<div class="banner">The dashboard server could not be reached. Check your connection and reload the page.</div>`;
+  if (dbState==="loading" && !S.loaded) { m.innerHTML = `<div class="empty"><span class="spinner"></span> Loading the program data</div>`; return; }
+  const fn = {overview:vOverview, docs:vDocs, actions:vActions, meetings:vMeetings, interfaces:vInterfaces, gtm:vGtm}[UI.view] || vOverview;
+  m.innerHTML = banner + fn();
+  bind(m);
+}
+
+/* ---------- overview ---------- */
+function stationsFor(ws){
+  const cats = categories(ws);
+  return cats.map(c => {
+    const reviewed = S.meetings.some(m => m.workstream===ws && m.category===c);
+    const open = S.actions.filter(a => a.category===c && a.status!=="done").length;
+    const docs = S.docs.filter(d => d.category===c).length;
+    const iface = S.interfaces.find(i => i.category===c);
+    const bits = [];
+    if (reviewed) bits.push("Reviewed"); else if (docs) bits.push("Documented"); else if (iface) bits.push(iface.status||"Concept");
+    if (open) bits.push(`${open} open`);
+    return {c, reviewed, label: bits.join(", ") || "Not started"};
+  });
+}
+function vOverview(){
+  const st = S.status;
+  const oa = openActions(), over = oa.filter(isOver).length;
+  const gtmDone = S.gtm.filter(g=>g.status==="done").length;
+  const gtmPct = S.gtm.length ? Math.round(gtmDone/S.gtm.length*100) : 0;
+  const lastMeeting = S.meetings[0];
+  const canAsk = !!sample;
+  const headline = st ? esc(clean(st.headline)) : "No status brief yet";
+  const overall = st ? esc(clean(st.overall)) : `Generate a plain-English brief from ${S.meetings.length} meeting${S.meetings.length===1?"":"s"}, ${S.actions.length} action items and ${S.docs.length} documents. Anyone joining the project can read it to get up to speed.`;
+  const tracks = ["backend","interfaces"].map(ws => {
+    const sts = stationsFor(ws);
+    return `<div class="track ${ws}"><div class="track-name">${WS[ws].label}<small>${sts.filter(s=>s.reviewed).length} of ${sts.length} topics reviewed</small></div>
+      <div class="rail">${sts.length ? sts.map(s=>`<button class="station ${s.reviewed?"reviewed":""}" data-go-cat="${esc(s.c)}"><span class="dot"></span><b>${esc(s.c)}</b><span>${esc(s.label)}</span></button>`).join("") : `<span class="muted small" style="padding-top:4px">Add a document or interface to start this track.</span>`}</div></div>`;
+  }).join("");
+  const wsCards = st && Array.isArray(st.workstreams) ? `<div class="ws-cards">${st.workstreams.map(w => {
+      const key = /interface/i.test(w.name) ? "interfaces" : /market|gtm/i.test(w.name) ? "gtm" : "backend";
+      const tone = /block|risk/i.test(w.state||"") ? "bad" : /track|progress/i.test(w.state||"") ? "ok" : "warn";
+      return `<div class="ws-card ${key}"><div class="row"><h3>${esc(clean(w.name))}</h3><span class="chip ${tone}">${esc(w.state||"")}</span></div><p>${esc(clean(w.summary))}</p>${w.next?`<div class="next">Next: ${esc(clean(w.next))}</div>`:""}</div>`;
+    }).join("")}</div>` : "";
+  const byOwner = {};
+  oa.forEach(a => { const k=a.owner||"Unassigned"; byOwner[k]=(byOwner[k]||0)+1; });
+  const ownerRows = Object.entries(byOwner).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxO = Math.max(1,...ownerRows.map(r=>r[1]));
+  const decisions = lastMeeting?.summary?.decisions || [];
+  return `
+  <section class="hero" aria-labelledby="hl">
+    <div class="eyeline"><span>Where we stand</span>${st?`<span>Updated ${esc(fmtDate(st.generatedAt))}</span>`:""}<span class="spacer"></span>
+      <button class="btn ${st?"":"primary"} sm" data-act="gen-status" ${canAsk?"":"disabled title='AI is not set up on the server yet'"}>${st?"Refresh brief":"Generate status brief"}</button></div>
+    <h1 id="hl">${headline}</h1>
+    <p class="overall">${overall}</p>
+    ${wsCards}
+    <div class="tracks" aria-label="Progress by workstream">${tracks}</div>
+    <div class="stats">
+      <div class="stat"><b>${oa.length}</b><span>Open action items</span></div>
+      <div class="stat"><b style="color:${over?"var(--bad)":"inherit"}">${over}</b><span>Overdue</span></div>
+      <div class="stat"><b>${S.meetings.length}</b><span>Meetings logged</span></div>
+      <div class="stat"><b>${gtmPct}%</b><span>Go-to-market readiness</span></div>
+    </div>
+  </section>
+  <div class="lists">
+    ${st && (st.openQuestions||[]).length ? `<div class="panel"><h3>Open questions</h3><ul>${st.openQuestions.map(q=>`<li>${esc(clean(q))}</li>`).join("")}</ul></div>`:""}
+    ${st && (st.risks||[]).length ? `<div class="panel"><h3>Risks to watch</h3><ul>${st.risks.map(q=>`<li>${esc(clean(q))}</li>`).join("")}</ul></div>`:""}
+    <div class="panel"><h3>Latest decisions</h3>${decisions.length ? `<ul>${decisions.slice(0,5).map(d=>`<li><b>${esc(clean(d.heading))}:</b> ${esc(clean(d.text))}</li>`).join("")}</ul><p class="small muted" style="margin:10px 0 0">From ${esc(lastMeeting.title)}. <a href="#meetings" data-open-meeting="${esc(lastMeeting.id)}">Read the summary</a></p>` : `<p class="muted small">Import a meeting transcript to see decisions here.</p>`}</div>
+    <div class="panel"><h3>Open items by owner</h3>${ownerRows.length ? ownerRows.map(([n,c])=>`<div style="margin:8px 0"><div class="row" style="justify-content:space-between">${ownerHtml(n==="Unassigned"?"":n)}<b>${c}</b></div><div class="bar" style="margin-top:4px"><i style="width:${c/maxO*100}%;background:var(--ws-a)"></i></div></div>`).join("") : `<p class="muted small">No open action items.</p>`}</div>
+  </div>`;
+}
+async function genStatus(btn){
+  if (!sample) return;
+  btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Reading the project`;
+  const data = {
+    documents: S.docs.map(d=>({title:d.title, workstream:d.workstream, category:d.category, subcategory:d.subcategory, kind:d.kind, commentsImported:(d.comments||[]).length})),
+    meetings: S.meetings.map(m=>({title:m.title, date:m.date, workstream:m.workstream, category:m.category, subcategory:m.subcategory, keyOutcomes:m.summary?.keyOutcomes, decisions:(m.summary?.decisions||[]).map(d=>d.heading+": "+d.text+((d.points||[]).length?" ("+d.points.map(p=>p.label+": "+p.text).join("; ")+")":"")), requirements:(m.summary?.requirements||[]).map(r=>r.heading+": "+r.text)})),
+    actionItems: S.actions.map(a=>({task:a.title, owner:a.owner||"Unassigned", status:a.status, due:a.due||null, overdue:isOver(a), workstream:a.workstream, category:a.category})),
+    interfaces: S.interfaces.map(i=>({name:i.name, workstream:i.workstream, status:i.status})),
+    goToMarket: DEPTS.map(d=>{ const it=S.gtm.filter(g=>g.dept===d); return {department:d, done:it.filter(g=>g.status==="done").length, inProgress:it.filter(g=>g.status==="doing").map(g=>g.question), total:it.length}; }),
+    today: today()
+  };
+  const prompt = `You are the program lead's analyst for KUDO's platform revamp. The revamp has two workstreams: "Interface revamp" (redesign of KUDO interfaces and roles, driven by the KUDO Interface Suite PRD) and "Ops backend (MS & LS)" (a new operations back-end for Meeting Services and Language Services, including the LS & MS dashboards and staffing automation). There is also go-to-market readiness across departments.
+
+Write a status brief for someone who has just joined the project and needs to understand where things stand. Use plain English, short sentences, no jargon without explanation, and never use em dashes or en dashes. Base every statement only on the data below. Do not invent dates, names or progress. If a workstream has little data, say so honestly.
+
+Return JSON only, with exactly this shape:
+{"headline": "one sentence, max 18 words, the single most important thing to know right now",
+ "overall": "3 to 5 sentences: what has been agreed, what is being worked on, what is blocking progress",
+ "workstreams": [{"name": "Ops backend (MS & LS)" | "Interface revamp" | "Go-to-market", "state": "On track" | "In progress" | "At risk" | "Blocked" | "Not started", "summary": "2 to 3 sentences", "next": "the next concrete step and who owns it, if known"}],
+ "openQuestions": ["up to 5 unresolved questions"],
+ "risks": ["up to 4 risks, each one sentence"]}
+
+Project data:
+${JSON.stringify(data)}`;
+  try {
+    const r = await sample.json(prompt, {modelTier:"complex"});
+    const ok = await write("status","current",{...r, generatedAt:new Date().toISOString()});
+    if (!ok) { S.status = {...r, generatedAt:new Date().toISOString()}; render(); }
+    toast("Status brief updated");
+  } catch(e){ handleSampleErr(e); btn.disabled=false; btn.textContent="Generate status brief"; }
+}
+function handleSampleErr(e){
+  if (e?.code !== "auth") toast(e?.message || "Claude could not complete that request. Try again.");
+  console.warn(e);
+}
+
+/* ---------- documents ---------- */
+function vDocs(){
+  const cols = ["backend","interfaces","gtm"].filter(ws => ws!=="gtm" || S.docs.some(d=>d.workstream==="gtm"));
+  return `<div class="view-head"><div><h2>Documents</h2><p>Every document for the revamp, grouped by workstream, category and sub-category. Import a document's comments to turn open threads into action items.</p></div>
+    <button class="btn primary" data-act="add-doc">Add document</button></div>
+  <div class="doc-cols">${cols.map(ws => {
+    const docs = S.docs.filter(d => d.workstream===ws);
+    const masters = docs.filter(d => d.kind==="Master document");
+    const rest = docs.filter(d => d.kind!=="Master document");
+    const byCat = {};
+    rest.forEach(d => { const c=d.category||"General"; (byCat[c] ||= {}); const s=d.subcategory||""; (byCat[c][s] ||= []).push(d); });
+    return `<section class="doc-col ${ws}"><header><h3>${WS[ws].label}</h3><span class="muted small">${docs.length} document${docs.length===1?"":"s"}</span></header>
+      ${masters.map(d=>`<div class="master"><span class="docicon"></span><div class="t" style="flex:1;min-width:0"><div class="small muted">Master document</div>${docRow(d,true)}</div></div>`).join("")}
+      ${Object.keys(byCat).sort().map(c => `<div class="cat"><h3>${esc(c)}</h3>${Object.keys(byCat[c]).sort().map(s => `<div class="${s?"sub":""}">${s?`<h4>${esc(s)}</h4>`:""}${byCat[c][s].map(d=>`<div class="doc-row"><span class="docicon small"></span><div class="t">${docRow(d)}</div></div>`).join("")}</div>`).join("")}</div>`).join("")}
+      ${!docs.length?`<div class="empty">No documents yet.</div>`:""}
+    </section>`;
+  }).join("")}</div>`;
+}
+function docRow(d, master){
+  const open = S.actions.filter(a => a.source?.docId===d.id && a.status!=="done").length;
+  const ncom = (d.comments||[]).filter(c=>!c.done).length;
+  return `<a class="title" href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
+    <div class="doc-meta">${d.kind && !master?`<span>${esc(d.kind)}</span>`:""}${d.commentsImportedAt?`<span>${ncom} open comment${ncom===1?"":"s"}, imported ${esc(fmtDate(d.commentsImportedAt))}</span>`:`<span>Comments not imported yet</span>`}${open?`<span>${open} open action${open===1?"":"s"}</span>`:""}</div>
+    <div class="row" style="margin-top:6px"><button class="btn sm" data-act="import-comments" data-id="${esc(d.id)}">Import comments</button>${d.comments?.length?`<button class="btn sm ghost" data-act="view-comments" data-id="${esc(d.id)}">View comments</button>`:""}<button class="btn sm ghost" data-act="edit-doc" data-id="${esc(d.id)}">Edit</button></div>`;
+}
+function docForm(d){
+  d = d || {workstream:"backend", kind:"Review document"};
+  const cats = categories(), subs = subcategories();
+  openModal(d.id?"Edit document":"Add document", `
+    <div class="stack">
+      <div><label class="f" for="d_t">Title</label><input type="text" id="d_t" value="${esc(d.title)}"></div>
+      <div><label class="f" for="d_u">Link (SharePoint, Google Drive, Notion)</label><input type="url" id="d_u" value="${esc(d.url)}" placeholder="https://"></div>
+      <div class="grid2">
+        <div><label class="f" for="d_w">Workstream</label><select id="d_w">${Object.entries(WS).map(([k,v])=>`<option value="${k}" ${d.workstream===k?"selected":""}>${v.label}</option>`).join("")}</select></div>
+        <div><label class="f" for="d_k">Type</label><select id="d_k">${["Master document","Review document","Specification","Mockup","Other"].map(k=>`<option ${d.kind===k?"selected":""}>${k}</option>`).join("")}</select></div>
+        <div><label class="f" for="d_c">Category</label><input type="text" id="d_c" list="catList" value="${esc(d.category)}" placeholder="e.g. LS & MS Dashboard"></div>
+        <div><label class="f" for="d_s">Sub-category</label><input type="text" id="d_s" list="subList" value="${esc(d.subcategory)}" placeholder="e.g. Home page"></div>
+      </div>
+      <datalist id="catList">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+      <datalist id="subList">${subs.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    </div>`,
+    `${d.id?`<button class="btn danger" id="d_del">Delete document</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="d_save">${d.id?"Save changes":"Add document"}</button>`);
+  $("#d_save").onclick = async () => {
+    const title = $("#d_t").value.trim(); if (!title) return toast("Add a title first.");
+    const body = {...d, title, url:$("#d_u").value.trim(), workstream:$("#d_w").value, kind:$("#d_k").value, category:$("#d_c").value.trim(), subcategory:$("#d_s").value.trim()};
+    const id = d.id || uid("doc"); delete body.id;
+    if (!body.createdAt) body.createdAt = new Date().toISOString();
+    if (await write("docs", id, body)) { closeModal(); toast(d.id?"Document saved":"Document added"); }
+  };
+  if (d.id) $("#d_del").onclick = async () => { if (confirm("Delete this document from the dashboard? The file itself is not affected.")) { if (await remove("docs", d.id)) { closeModal(); toast("Document removed"); } } };
+}
+
+/* docx comments parsing */
+async function parseDocxComments(file){
+  if (!window.JSZip) throw new Error("The .docx reader did not load. Paste the comments instead.");
+  const zip = await JSZip.loadAsync(file);
+  const cx = zip.file("word/comments.xml");
+  if (!cx) return [];
+  const P = new DOMParser();
+  const cdoc = P.parseFromString(await cx.async("string"), "application/xml");
+  const ext = zip.file("word/commentsExtended.xml");
+  const exMap = {};
+  if (ext) {
+    const edoc = P.parseFromString(await ext.async("string"), "application/xml");
+    for (const e of edoc.getElementsByTagName("w15:commentEx")) exMap[e.getAttribute("w15:paraId")] = {parent:e.getAttribute("w15:paraIdParent"), done:e.getAttribute("w15:done")==="1"};
+  }
+  const anchors = {};
+  const dx = zip.file("word/document.xml");
+  if (dx) {
+    const ddoc = P.parseFromString(await dx.async("string"), "application/xml");
+    const open = new Set();
+    for (const el of ddoc.getElementsByTagName("*")) {
+      const t = el.tagName;
+      if (t==="w:commentRangeStart") open.add(el.getAttribute("w:id"));
+      else if (t==="w:commentRangeEnd") open.delete(el.getAttribute("w:id"));
+      else if (t==="w:t" && open.size) for (const id of open) { anchors[id] = (anchors[id]||"") + el.textContent; }
+    }
+  }
+  const list = [];
+  const byPara = {};
+  for (const c of cdoc.getElementsByTagName("w:comment")) {
+    const paras = [...c.getElementsByTagName("w:p")];
+    const text = paras.map(p => [...p.getElementsByTagName("w:t")].map(t=>t.textContent).join("")).join("\n").trim();
+    const lastPara = paras.length ? paras[paras.length-1].getAttribute("w14:paraId") : null;
+    const item = {cid:c.getAttribute("w:id"), author:c.getAttribute("w:author")||"Unknown", date:(c.getAttribute("w:date")||"").slice(0,10), text, anchor:(anchors[c.getAttribute("w:id")]||"").slice(0,300), paraId:lastPara, replies:[], done:false};
+    const ex = lastPara && exMap[lastPara];
+    if (ex) item.done = ex.done;
+    if (lastPara) byPara[lastPara] = item;
+    item._parent = ex?.parent || null;
+    list.push(item);
+  }
+  const top = [];
+  for (const it of list) {
+    const parent = it._parent && byPara[it._parent];
+    delete it._parent;
+    if (parent) { parent.replies.push({author:it.author, date:it.date, text:it.text}); if (it.done) parent.done = true; }
+    else top.push(it);
+  }
+  top.forEach(t => delete t.paraId);
+  return top;
+}
+function commentsHtml(list){
+  if (!list.length) return `<div class="empty">No comments found in this document.</div>`;
+  return list.map(c => `<div class="comment ${c.done?"resolved":""}">${c.anchor?`<q>${esc(c.anchor)}</q>`:""}<div><b>${esc(c.author)}</b> <span class="muted small">${esc(fmtDate(c.date))}${c.done?", resolved":""}</span></div><div>${esc(c.text)}</div>${(c.replies||[]).map(r=>`<div class="reply"><b>${esc(r.author)}</b> <span class="muted small">${esc(fmtDate(r.date))}</span><div>${esc(r.text)}</div></div>`).join("")}</div>`).join("");
+}
+function viewComments(d){
+  openModal(`Comments on ${d.title}`, commentsHtml(d.comments||[]), `<button class="btn" data-close>Close</button><button class="btn primary" id="vc_imp">Import newer comments</button>`);
+  $("#vc_imp").onclick = () => importComments(d);
+}
+function importComments(d){
+  openModal(`Import comments: ${d.title}`, `
+    <div class="stack">
+      <p class="small muted" style="margin:0">Download the latest version from SharePoint (File, Save a copy, Download) and drop the .docx here. The dashboard reads every comment thread, its replies and whether it is resolved, then Claude lists the pending action items and their owners.</p>
+      <div class="drop" id="drop" tabindex="0" role="button">Drop the .docx here, or click to choose a file<input type="file" id="file" accept=".docx" hidden></div>
+      <details><summary class="small">No file? Paste comments instead</summary><textarea id="paste" placeholder="Author: comment text&#10;Author: reply..." style="margin-top:8px"></textarea><button class="btn sm" id="usePaste" style="margin-top:8px">Use pasted comments</button></details>
+      <div id="cm_out"></div>
+    </div>`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="cm_go" disabled>Find action items</button>`);
+  let comments = null;
+  const out = $("#cm_out"), go = $("#cm_go");
+  const show = list => { comments = list; out.innerHTML = `<h3 style="margin:6px 0 10px">${list.length} comment thread${list.length===1?"":"s"} found, ${list.filter(c=>!c.done).length} still open</h3>` + commentsHtml(list); go.disabled = !list.filter(c=>!c.done).length || !sample; if (!sample) out.insertAdjacentHTML("afterbegin", `<div class="banner">AI is not set up on the server yet, so action items cannot be extracted automatically. Comments are still saved.</div>`); };
+  const onFile = async f => { if (!f) return; out.innerHTML = `<span class="spinner"></span> Reading ${esc(f.name)}`; try { show(await parseDocxComments(f)); } catch(e){ out.innerHTML = `<div class="banner">${esc(e.message||"This file could not be read. Check that it is a .docx file.")}</div>`; } };
+  wireDrop($("#drop"), $("#file"), onFile);
+  $("#usePaste").onclick = () => { const t=$("#paste").value.trim(); if (!t) return; show(t.split(/\n(?=[^\n:]{1,40}:)/).map((l,i)=>{ const m=l.match(/^([^:\n]{1,40}):\s*([\s\S]*)$/); return {cid:"p"+i, author:m?m[1].trim():"Unknown", text:(m?m[2]:l).trim(), anchor:"", replies:[], done:false}; })); };
+  go.onclick = async () => {
+    await write("docs", d.id, {comments: comments.slice(0,300), commentsImportedAt:new Date().toISOString()}, true);
+    go.disabled = true; go.innerHTML = `<span class="spinner"></span> Finding action items`;
+    const open = comments.filter(c=>!c.done);
+    const prompt = `You help run KUDO's platform revamp. Below are the open comment threads from the document "${d.title}" (workstream: ${WS[d.workstream]?.label||d.workstream}, topic: ${d.category||""} ${d.subcategory?"/ "+d.subcategory:""}).
+
+Identify the pending action items: things someone still needs to do, decide, answer or provide. Skip threads that are fully answered in their replies, pure acknowledgements, and duplicates. Merge threads that ask for the same thing.
+For each item give an owner: the person the comment is addressed to or who is expected to act (look for @mentions, names and "can you" requests). If a question is not addressed to anyone, the owner is whoever is best placed according to the thread; if still unclear use "Unassigned". Use names exactly as they appear. Never invent people.
+Write each task as a short imperative sentence (max 16 words) plus one sentence of context. No em dashes.
+Known team members: ${people().join(", ")}.
+
+Return JSON only: {"items":[{"task":"...","context":"...","owner":"...","commentIds":["..."]}]}
+
+Comments:
+${JSON.stringify(open.map(c=>({id:c.cid, author:c.author, date:c.date, onText:c.anchor, comment:c.text, replies:c.replies})))}`;
+    try {
+      const r = await sample.json(prompt, {modelTier:"default"});
+      proposeActions(r.items||[], {type:"doc", docId:d.id, label:d.title}, {workstream:d.workstream, category:d.category, subcategory:d.subcategory});
+    } catch(e){ handleSampleErr(e); go.disabled=false; go.textContent="Find action items"; }
+  };
+}
+function wireDrop(zone, input, onFile){
+  zone.onclick = () => input.click();
+  zone.onkeydown = e => { if (e.key==="Enter"||e.key===" ") { e.preventDefault(); input.click(); } };
+  input.onchange = () => onFile(input.files[0]);
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add("over"); };
+  zone.ondragleave = () => zone.classList.remove("over");
+  zone.ondrop = e => { e.preventDefault(); zone.classList.remove("over"); onFile(e.dataTransfer.files[0]); };
+}
+function proposeActions(items, source, ctx){
+  const ppl = people();
+  openModal(`Review ${items.length} action item${items.length===1?"":"s"}`, items.length ? `
+    <p class="small muted" style="margin:0 0 10px">Untick anything you do not want to track and correct owners before adding.</p>
+    <div id="props">${items.map((it,i)=>`<div class="prop"><input type="checkbox" checked data-i="${i}" aria-label="Keep item"><div><div class="atitle">${esc(clean(it.task))}</div>${it.context?`<div class="adetail">${esc(clean(it.context))}</div>`:""}</div><input type="text" list="pplList" data-owner="${i}" value="${esc(it.owner==="Unassigned"?"":it.owner)}" placeholder="Owner"></div>`).join("")}</div>
+    <datalist id="pplList">${ppl.map(p=>`<option value="${esc(p)}">`).join("")}</datalist>` : `<div class="empty">No pending action items found.</div>`,
+    `<button class="btn" data-close>${items.length?"Cancel":"Close"}</button>${items.length?`<button class="btn primary" id="p_add">Add selected items</button>`:""}`);
+  if (!items.length) return;
+  $("#p_add").onclick = async () => {
+    const keep = [...document.querySelectorAll("#props input[type=checkbox]")].filter(c=>c.checked).map(c=>+c.dataset.i);
+    let n=0;
+    for (const i of keep) {
+      const it = items[i];
+      const ok = await write("actions", uid("act"), {title:clean(it.task), detail:clean(it.context||""), owner:document.querySelector(`[data-owner="${i}"]`).value.trim(), due:it.due||"", status:"open", priority:"normal", workstream:ctx.workstream||"", category:ctx.category||"", subcategory:ctx.subcategory||"", source, createdAt:new Date().toISOString()});
+      if (ok) n++; else break;
+    }
+    closeModal(); toast(`${n} action item${n===1?"":"s"} added`);
+  };
+}
+
+/* ---------- actions ---------- */
+function vActions(){
+  const f = UI.af;
+  let list = S.actions.filter(a =>
+    (f.status==="all" || (f.status==="open" ? a.status!=="done" : a.status==="done")) &&
+    (!f.owner || (f.owner==="__none" ? !a.owner : a.owner===f.owner)) &&
+    (!f.ws || a.workstream===f.ws) && (!f.cat || a.category===f.cat) &&
+    (!f.q || (a.title+" "+(a.detail||"")+" "+(a.owner||"")).toLowerCase().includes(f.q.toLowerCase())));
+  list.sort((a,b)=> (a.status==="done")-(b.status==="done") || (isOver(b)-isOver(a)) || String(a.due||"9999").localeCompare(String(b.due||"9999")));
+  const groups = {};
+  const key = a => f.group==="owner" ? (a.owner||"Unassigned") : f.group==="topic" ? ([WS[a.workstream]?.short, a.category].filter(Boolean).join(", ") || "No topic") : "All";
+  list.forEach(a => (groups[key(a)] ||= []).push(a));
+  const ppl = people();
+  return `<div class="view-head"><div><h2>Action items</h2><p>Collected from document comments, meeting transcripts and the go-to-market plan. Tick an item to mark it complete.</p></div>
+    <button class="btn primary" data-act="add-action">Add action item</button></div>
+  <div class="filters">
+    <div class="seg" role="group" aria-label="Status">${[["open","Open"],["done","Completed"],["all","All"]].map(([k,l])=>`<button data-af="status" data-v="${k}" aria-pressed="${f.status===k}">${l}</button>`).join("")}</div>
+    <select data-af-sel="owner" aria-label="Owner"><option value="">Everyone</option><option value="__none" ${f.owner==="__none"?"selected":""}>Unassigned</option>${ppl.map(p=>`<option ${f.owner===p?"selected":""}>${esc(p)}</option>`).join("")}</select>
+    <select data-af-sel="ws" aria-label="Workstream"><option value="">All workstreams</option>${Object.entries(WS).map(([k,v])=>`<option value="${k}" ${f.ws===k?"selected":""}>${v.label}</option>`).join("")}</select>
+    <select data-af-sel="cat" aria-label="Topic"><option value="">All topics</option>${categories().map(c=>`<option ${f.cat===c?"selected":""}>${esc(c)}</option>`).join("")}</select>
+    <input type="search" data-af-q placeholder="Search items" value="${esc(f.q)}" aria-label="Search">
+    <div class="seg" role="group" aria-label="Group by">${[["owner","By owner"],["topic","By topic"],["none","List"]].map(([k,l])=>`<button data-af="group" data-v="${k}" aria-pressed="${f.group===k}">${l}</button>`).join("")}</div>
+  </div>
+  <div class="alist">${list.length ? Object.entries(groups).map(([g,items]) => `${f.group!=="none"?`<div class="group-h"><span>${esc(g)}</span><span class="muted">${items.length}</span></div>`:""}${items.map(actionRow).join("")}`).join("") : `<div class="empty">${S.actions.length?"No items match these filters.":"No action items yet. Import comments or a meeting transcript, or add one yourself."}</div>`}</div>`;
+}
+function actionRow(a){
+  const src = a.source?.type==="meeting" ? `<a href="#meetings" data-open-meeting="${esc(a.source.meetingId)}" class="small">${esc(a.source.label||"Meeting")}</a>` : a.source?.type==="doc" ? `<span class="small muted">Comment on ${esc(a.source.label||"document")}</span>` : a.source?.type==="gtm" ? `<span class="small muted">Go-to-market, ${esc(a.source.label||"")}</span>` : "";
+  return `<div class="aitem ${a.status==="done"?"done":""}">
+    <button class="check ${a.status==="done"?"on":""}" data-act="toggle" data-id="${esc(a.id)}" aria-label="${a.status==="done"?"Mark as open":"Mark as complete"}"></button>
+    <div><div class="atitle">${esc(a.title)}</div>${a.detail?`<div class="adetail">${esc(a.detail)}</div>`:""}
+      <div class="ameta">${ownerHtml(a.owner)}${a.due?`<span class="due small ${isOver(a)?"over":""}">${isOver(a)?"Overdue, ":"Due "}${esc(fmtDate(a.due))}</span>`:""}${a.priority==="high"?`<span class="chip bad">High priority</span>`:""}${wsChip(a.workstream)}${a.category?`<span class="chip">${esc(a.category)}${a.subcategory?", "+esc(a.subcategory):""}</span>`:""}${src}${a._updatedBy?`<span class="small muted">Updated by ${esc(a._updatedBy)}</span>`:""}</div></div>
+    <div class="aside"><button class="btn sm ghost" data-act="edit-action" data-id="${esc(a.id)}">Edit</button></div>
+  </div>`;
+}
+function actionForm(a){
+  a = a || {status:"open", priority:"normal", workstream: UI.af.ws || "backend"};
+  const ppl = people();
+  openModal(a.id?"Edit action item":"Add action item", `
+    <div class="stack">
+      <div><label class="f" for="a_t">What needs to happen</label><input type="text" id="a_t" value="${esc(a.title)}"></div>
+      <div><label class="f" for="a_d">Context</label><textarea id="a_d" rows="3">${esc(a.detail)}</textarea></div>
+      <div class="grid3">
+        <div><label class="f" for="a_o">Owner</label><input type="text" id="a_o" list="pplList" value="${esc(a.owner)}" placeholder="Name or team"></div>
+        <div><label class="f" for="a_due">Due date</label><input type="date" id="a_due" value="${esc(a.due)}"></div>
+        <div><label class="f" for="a_p">Priority</label><select id="a_p"><option value="normal">Normal</option><option value="high" ${a.priority==="high"?"selected":""}>High</option></select></div>
+      </div>
+      <div class="grid3">
+        <div><label class="f" for="a_w">Workstream</label><select id="a_w"><option value="">None</option>${Object.entries(WS).map(([k,v])=>`<option value="${k}" ${a.workstream===k?"selected":""}>${v.label}</option>`).join("")}</select></div>
+        <div><label class="f" for="a_c">Category</label><input type="text" id="a_c" list="catList" value="${esc(a.category)}"></div>
+        <div><label class="f" for="a_s">Sub-category</label><input type="text" id="a_s" list="subList" value="${esc(a.subcategory)}"></div>
+      </div>
+      <label class="row small"><input type="checkbox" id="a_done" ${a.status==="done"?"checked":""}> Completed</label>
+      <datalist id="pplList">${ppl.map(p=>`<option value="${esc(p)}">`).join("")}</datalist>
+      <datalist id="catList">${categories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+      <datalist id="subList">${subcategories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    </div>`,
+    `${a.id?`<button class="btn danger" id="a_del">Delete</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="a_save">${a.id?"Save changes":"Add action item"}</button>`);
+  $("#a_save").onclick = async () => {
+    const title = $("#a_t").value.trim(); if (!title) return toast("Describe the action first.");
+    const done = $("#a_done").checked;
+    const body = {...a, title, detail:$("#a_d").value.trim(), owner:$("#a_o").value.trim(), due:$("#a_due").value, priority:$("#a_p").value, workstream:$("#a_w").value, category:$("#a_c").value.trim(), subcategory:$("#a_s").value.trim(), status:done?"done":"open", doneAt: done ? (a.doneAt||new Date().toISOString()) : null};
+    const id = a.id || uid("act"); delete body.id;
+    if (!body.createdAt) body.createdAt = new Date().toISOString();
+    if (!body.source) body.source = {type:"manual"};
+    if (await write("actions", id, body)) { closeModal(); toast(a.id?"Action item saved":"Action item added"); }
+  };
+  if (a.id) $("#a_del").onclick = async () => { if (confirm("Delete this action item?")) { if (await remove("actions", a.id)) { closeModal(); toast("Action item deleted"); } } };
+}
+
+/* ---------- meetings ---------- */
+function summaryHtml(s){
+  if (!s) return "";
+  const pts = p => (p||[]).length ? `<ul>${p.map(x=>`<li><b>${esc(clean(x.label))}:</b> ${esc(clean(x.text))}</li>`).join("")}</ul>` : "";
+  return `<h3>Key outcomes</h3><p>${esc(clean(s.keyOutcomes))}</p>
+    ${(s.decisions||[]).length?`<h3>Decisions made</h3><ul>${s.decisions.map(d=>`<li><b>${esc(clean(d.heading))}:</b> ${esc(clean(d.text))}${pts(d.points)}</li>`).join("")}</ul>`:""}
+    ${(s.requirements||[]).length?`<h3>Requirements</h3><ul>${s.requirements.map(d=>`<li><b>${esc(clean(d.heading))}:</b> ${esc(clean(d.text))}</li>`).join("")}</ul>`:""}`;
+}
+function vMeetings(){
+  const cur = S.meetings.find(m=>m.id===UI.meeting) || S.meetings[0];
+  const acts = cur ? S.actions.filter(a => a.source?.meetingId===cur.id) : [];
+  return `<div class="view-head"><div><h2>Meetings</h2><p>Import a transcript and Claude writes the summary in the team format: key outcomes, decisions made, requirements and action items.</p></div>
+    <button class="btn primary" data-act="import-transcript">Import transcript</button></div>
+  ${S.meetings.length ? `<div class="meet-layout">
+    <div class="meet-list">${S.meetings.map(m=>`<button class="meet-card" data-meeting="${esc(m.id)}" aria-current="${cur&&m.id===cur.id}"><b>${esc(m.title)}</b><span class="muted small">${m.date?esc(fmtDate(m.date)):"No date"}</span><div class="row" style="margin-top:6px">${wsChip(m.workstream)}${m.category?`<span class="chip">${esc(m.category)}</span>`:""}</div></button>`).join("")}</div>
+    <article class="summary">
+      <div class="row"><h2 style="font-size:1.4rem">${esc(cur.title)}</h2><span class="spacer"></span><button class="btn sm" data-act="copy-summary" data-id="${esc(cur.id)}">Copy summary</button><button class="btn sm ghost" data-act="edit-meeting" data-id="${esc(cur.id)}">Edit</button></div>
+      <div class="row small muted" style="margin-top:6px">${cur.date?esc(fmtDate(cur.date)):"No date set"}${cur.category?`<span>, ${esc(cur.category)}${cur.subcategory?" / "+esc(cur.subcategory):""}</span>`:""}${(cur.summary?.attendees||[]).length?`<span>, with ${esc(cur.summary.attendees.join(", "))}</span>`:""}</div>
+      ${summaryHtml(cur.summary)}
+      <h3>Action items</h3>
+      ${acts.length ? `<div class="alist">${acts.map(actionRow).join("")}</div>` : `<p class="muted">No action items came out of this meeting.</p>`}
+    </article></div>` : `<div class="panel empty">No meetings yet. Import your first transcript to get a summary and action items.</div>`}`;
+}
+function condenseTranscript(raw){
+  const out = []; let last = null;
+  for (const l of raw.split(/\r?\n/)) {
+    const t = l.trim();
+    if (!t || t==="WEBVTT" || /^\d+$/.test(t) || /^\d{1,2}:\d{2}(:\d{2})?([.,]\d+)?\s*-->/.test(t)) continue;
+    const m = t.match(/^([^:]{1,40}):\s*(.*)$/);
+    const sp = m ? m[1].trim() : (last ? last.sp : "Unknown"), tx = m ? m[2] : t;
+    if (last && last.sp===sp) last.tx += " " + tx; else { last = {sp, tx}; out.push(last); }
+  }
+  return out.map(o => o.sp + ": " + o.tx).join("\n");
+}
+async function readTranscriptFile(f){
+  if (/\.docx$/i.test(f.name)) {
+    const zip = await JSZip.loadAsync(f);
+    const x = await zip.file("word/document.xml").async("string");
+    const d = new DOMParser().parseFromString(x, "application/xml");
+    return [...d.getElementsByTagName("w:p")].map(p => [...p.getElementsByTagName("w:t")].map(t=>t.textContent).join("")).join("\n");
+  }
+  return await f.text();
+}
+function transcriptForm(){
+  openModal("Import meeting transcript", `
+    <div class="stack">
+      <div class="grid2">
+        <div><label class="f" for="t_title">Meeting title</label><input type="text" id="t_title" placeholder="e.g. Review meeting 2: MS dashboard, meeting detail"></div>
+        <div><label class="f" for="t_date">Date</label><input type="date" id="t_date" value="${today()}"></div>
+      </div>
+      <div class="grid3">
+        <div><label class="f" for="t_ws">Workstream</label><select id="t_ws">${Object.entries(WS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("")}</select></div>
+        <div><label class="f" for="t_cat">Category</label><input type="text" id="t_cat" list="catList" placeholder="e.g. LS & MS Dashboard"></div>
+        <div><label class="f" for="t_sub">Sub-category</label><input type="text" id="t_sub" list="subList" placeholder="e.g. Home page"></div>
+      </div>
+      <datalist id="catList">${categories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+      <datalist id="subList">${subcategories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+      <div class="drop" id="drop" tabindex="0" role="button">Drop a transcript (.txt, .vtt, .docx), or click to choose<input type="file" id="file" accept=".txt,.vtt,.srt,.docx" hidden></div>
+      <div><label class="f" for="t_raw">Or paste the transcript</label><textarea id="t_raw" rows="6"></textarea></div>
+      <div id="t_info" class="small muted"></div>
+    </div>`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="t_go" ${sample?"":"disabled title='AI is not set up on the server yet'"}>Summarize meeting</button>`);
+  wireDrop($("#drop"), $("#file"), async f => { if (!f) return; try { $("#t_raw").value = await readTranscriptFile(f); $("#t_info").textContent = `Loaded ${f.name}.`; if (!$("#t_title").value) $("#t_title").value = f.name.replace(/\.[^.]+$/,"").replace(/[_-]+/g," "); } catch(e){ $("#t_info").textContent = "This file could not be read. Paste the text instead."; } });
+  $("#t_go").onclick = async () => {
+    const raw = $("#t_raw").value.trim(); if (!raw) return toast("Add a transcript first.");
+    let text = condenseTranscript(raw); if (text.length > 200000) text = text.slice(0,200000);
+    const meta = {title:$("#t_title").value.trim()||"Untitled meeting", date:$("#t_date").value, workstream:$("#t_ws").value, category:$("#t_cat").value.trim(), subcategory:$("#t_sub").value.trim()};
+    const btn = $("#t_go"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Reading the transcript, this can take a minute`;
+    const prior = S.meetings.filter(m => m.category && m.category===meta.category).map(m => ({title:m.title, keyOutcomes:m.summary?.keyOutcomes}));
+    const prompt = `You are the note-taker for KUDO's platform revamp program. KUDO provides AI-powered and human interpretation. The revamp has two workstreams: the Interface revamp (new interfaces and roles) and the Ops backend for Meeting Services (MS, operators and producers) and Language Services (LS, interpreters). KCP and KMP are KUDO platforms mentioned by the team.
+
+Summarize the meeting transcript below in the team's standard format. Be concise and factual, use plain English, never use em dashes or en dashes, and include only what was actually said.
+- keyOutcomes: 2 to 4 sentences on what the meeting achieved and aligned on.
+- decisions: each with a short heading (2 to 4 words) and one sentence. Use "points" for sub-decisions, for example per team (LS Team, MS Team) or per case (Time changes, Language changes).
+- requirements: things that must be true or be provided for the build to work.
+- actionItems: only real commitments or requests. owner is a named person if the transcript clearly identifies them, otherwise a team or role such as "MS Team", "LS Team", "Engineering", "Product", "Project Lead". Speakers are labelled "Speaker 1" and similar; map a label to a name only when the transcript itself makes it clear. Never invent names. due is an ISO date only if a date was stated, else null.
+- attendees: names clearly present in the meeting, or an empty list.
+Meeting topic: ${meta.category||"not specified"}${meta.subcategory?" / "+meta.subcategory:""}.
+Known team members: ${people().join(", ")}.
+${prior.length?"Earlier meetings on the same topic, for context only: "+JSON.stringify(prior):""}
+
+Return JSON only:
+{"keyOutcomes":"...","decisions":[{"heading":"...","text":"...","points":[{"label":"...","text":"..."}]}],"requirements":[{"heading":"...","text":"..."}],"actionItems":[{"owner":"...","task":"...","context":"...","due":null}],"attendees":[]}
+
+Transcript:
+${text}`;
+    try {
+      const r = await sample.json(prompt, {modelTier:"complex"});
+      previewMeeting(meta, r);
+    } catch(e){ handleSampleErr(e); btn.disabled=false; btn.textContent="Summarize meeting"; }
+  };
+}
+function previewMeeting(meta, r){
+  const items = r.actionItems || [];
+  const ppl = people();
+  openModal(`Summary: ${meta.title}`, `<div class="summary" style="border:0;padding:0">${summaryHtml(r)}
+    <h3>Action items</h3>${items.length?`<div id="props">${items.map((it,i)=>`<div class="prop"><input type="checkbox" checked data-i="${i}" aria-label="Keep item"><div><div class="atitle">${esc(clean(it.task))}</div>${it.context?`<div class="adetail">${esc(clean(it.context))}</div>`:""}</div><input type="text" list="pplList" data-owner="${i}" value="${esc(it.owner)}" placeholder="Owner"></div>`).join("")}</div>`:`<p class="muted">No action items found.</p>`}
+    <datalist id="pplList">${ppl.map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>`,
+    `<button class="btn" data-close>Discard</button><button class="btn primary" id="mt_save">Save meeting${items.length?" and action items":""}</button>`);
+  $("#mt_save").onclick = async () => {
+    const id = uid("mtg");
+    const summary = {keyOutcomes:r.keyOutcomes||"", decisions:r.decisions||[], requirements:r.requirements||[], attendees:r.attendees||[]};
+    if (!await write("meetings", id, {...meta, summary, createdAt:new Date().toISOString()})) return;
+    const keep = [...document.querySelectorAll("#props input[type=checkbox]")].filter(c=>c.checked).map(c=>+c.dataset.i);
+    for (const i of keep) {
+      const it = items[i];
+      await write("actions", uid("act"), {title:clean(it.task), detail:clean(it.context||""), owner:document.querySelector(`[data-owner="${i}"]`).value.trim(), due:it.due||"", status:"open", priority:"normal", workstream:meta.workstream, category:meta.category, subcategory:meta.subcategory, source:{type:"meeting", meetingId:id, label:meta.title}, createdAt:new Date().toISOString()});
+    }
+    UI.meeting = id; closeModal(); toast("Meeting saved"); go("meetings");
+  };
+}
+function meetingForm(m){
+  openModal("Edit meeting", `<div class="stack">
+    <div class="grid2"><div><label class="f" for="me_t">Title</label><input type="text" id="me_t" value="${esc(m.title)}"></div><div><label class="f" for="me_d">Date</label><input type="date" id="me_d" value="${esc(m.date)}"></div></div>
+    <div class="grid3"><div><label class="f" for="me_w">Workstream</label><select id="me_w">${Object.entries(WS).map(([k,v])=>`<option value="${k}" ${m.workstream===k?"selected":""}>${v.label}</option>`).join("")}</select></div>
+    <div><label class="f" for="me_c">Category</label><input type="text" id="me_c" list="catList" value="${esc(m.category)}"></div><div><label class="f" for="me_s">Sub-category</label><input type="text" id="me_s" value="${esc(m.subcategory)}"></div></div>
+    <div><label class="f" for="me_k">Key outcomes</label><textarea id="me_k" rows="5">${esc(m.summary?.keyOutcomes)}</textarea></div>
+    <datalist id="catList">${categories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>`,
+    `<button class="btn danger" id="me_del">Delete meeting</button><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="me_save">Save changes</button>`);
+  $("#me_save").onclick = async () => { const s = {...(m.summary||{}), keyOutcomes:$("#me_k").value.trim()}; if (await write("meetings", m.id, {title:$("#me_t").value.trim()||m.title, date:$("#me_d").value, workstream:$("#me_w").value, category:$("#me_c").value.trim(), subcategory:$("#me_s").value.trim(), summary:s}, true)) { closeModal(); toast("Meeting saved"); } };
+  $("#me_del").onclick = async () => { if (confirm("Delete this meeting summary? Its action items stay in the list.")) { if (await remove("meetings", m.id)) { UI.meeting=null; closeModal(); toast("Meeting deleted"); } } };
+}
+function summaryText(m){
+  const s = m.summary||{}; const L = [m.title, ""];
+  L.push("Key Outcomes", s.keyOutcomes||"", "", "Decisions Made");
+  (s.decisions||[]).forEach(d => { L.push(`- ${d.heading}: ${d.text}`); (d.points||[]).forEach(p=>L.push(`   - ${p.label}: ${p.text}`)); });
+  if ((s.requirements||[]).length) { L.push("", "Requirements"); s.requirements.forEach(r=>L.push(`- ${r.heading}: ${r.text}`)); }
+  const acts = S.actions.filter(a=>a.source?.meetingId===m.id);
+  if (acts.length) { L.push("", "Action Items"); acts.forEach(a=>L.push(`- ${a.owner||"Unassigned"}: ${a.title}${a.status==="done"?" (done)":""}`)); }
+  return clean(L.join("\n"));
+}
+
+/* ---------- interfaces ---------- */
+function vInterfaces(){
+  return `<div class="view-head"><div><h2>Interfaces</h2><p>The current Claude artifact for each interface in the revamp. Open the artifact to try it, or tap the preview to enlarge it.</p></div>
+    <button class="btn primary" data-act="add-iface">Add interface</button></div>
+  <div class="gallery">${S.interfaces.map(i => {
+    const open = S.actions.filter(a => a.category && a.category===i.category && a.status!=="done").length;
+    const docs = S.docs.filter(d => d.category && d.category===i.category);
+    const si = IFACE_STATUS.indexOf(i.status);
+    return `<article class="icard">
+      ${i.imageUrl ? `<button class="shot" data-zoom="${esc(i.imageUrl)}" aria-label="Enlarge ${esc(i.name)} preview"><img src="${esc(i.imageUrl)}" alt="${esc(i.name)} preview" loading="lazy"></button>` : `<div class="shot none">No preview yet</div>`}
+      <div class="body">
+        <div class="row"><h3>${esc(i.name)}</h3><span class="spacer"></span>${wsChip(i.workstream)}</div>
+        ${i.description?`<p>${esc(i.description)}</p>`:""}
+        <div class="row small"><span class="chip ${si>=3?"ok":si>=1?"warn":""}">${esc(i.status||"Concept")}</span>${open?`<a href="#actions" data-go-cat="${esc(i.category)}">${open} open action${open===1?"":"s"}</a>`:""}${docs.map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.subcategory||d.title)}</a>`).join("")}</div>
+        <div class="row" style="margin-top:auto;padding-top:6px">${i.artifactUrl?`<a class="btn sm primary" href="${esc(i.artifactUrl)}" target="_blank" rel="noopener">Open artifact</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(i.id)}">Edit</button></div>
+      </div></article>`;
+  }).join("") || `<div class="panel empty">No interfaces yet.</div>`}</div>`;
+}
+function ifaceForm(i){
+  i = i || {workstream:"interfaces", status:"In design"};
+  openModal(i.id?"Edit interface":"Add interface", `<div class="stack">
+    <div class="grid2"><div><label class="f" for="i_n">Interface name</label><input type="text" id="i_n" value="${esc(i.name)}"></div>
+      <div><label class="f" for="i_st">Status</label><select id="i_st">${IFACE_STATUS.map(s=>`<option ${i.status===s?"selected":""}>${s}</option>`).join("")}</select></div></div>
+    <div class="grid2"><div><label class="f" for="i_w">Workstream</label><select id="i_w">${Object.entries(WS).map(([k,v])=>`<option value="${k}" ${i.workstream===k?"selected":""}>${v.label}</option>`).join("")}</select></div>
+      <div><label class="f" for="i_c">Category (links documents and actions)</label><input type="text" id="i_c" list="catList" value="${esc(i.category)}"></div></div>
+    <div><label class="f" for="i_u">Claude artifact link</label><input type="url" id="i_u" value="${esc(i.artifactUrl)}" placeholder="https://claude.ai/artifact/..."></div>
+    <div><label class="f" for="i_d">What it is for</label><textarea id="i_d" rows="2">${esc(i.description)}</textarea></div>
+    ${assets ? `<div><label class="f">Preview image</label><div class="drop" id="drop" tabindex="0" role="button">${i.imageUrl?"Replace the preview: drop a screenshot or click to choose":"Drop a screenshot of the artifact, or click to choose"}<input type="file" id="file" accept="image/*" hidden></div><div id="i_info" class="small muted" style="margin-top:6px"></div></div>` : `<p class="small muted">Preview uploads are not available right now.</p>`}
+    <datalist id="catList">${categories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>`,
+    `${i.id?`<button class="btn danger" id="i_del">Delete</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="i_save">${i.id?"Save changes":"Add interface"}</button>`);
+  let img = {imageUrl:i.imageUrl||"", assetId:i.assetId||""};
+  if (assets) wireDrop($("#drop"), $("#file"), async f => { if (!f) return; $("#i_info").innerHTML = `<span class="spinner"></span> Uploading`; try { const r = await assets.upload(f); img = {imageUrl:r.url, assetId:r.id}; $("#i_info").textContent = "Preview uploaded. Save to keep it."; } catch(e){ $("#i_info").textContent = "Upload failed. Use a PNG, JPG or WebP under 20 MB."; } });
+  $("#i_save").onclick = async () => {
+    const name = $("#i_n").value.trim(); if (!name) return toast("Name the interface first.");
+    const body = {...i, ...img, name, status:$("#i_st").value, workstream:$("#i_w").value, category:$("#i_c").value.trim(), artifactUrl:$("#i_u").value.trim(), description:$("#i_d").value.trim()};
+    const id = i.id || uid("ifc"); delete body.id; if (body.order==null) body.order = S.interfaces.length;
+    if (await write("interfaces", id, body)) { closeModal(); toast("Interface saved"); }
+  };
+  if (i.id) $("#i_del").onclick = async () => { if (confirm("Remove this interface from the dashboard?")) { if (await remove("interfaces", i.id)) { closeModal(); toast("Interface removed"); } } };
+}
+
+/* ---------- go-to-market ---------- */
+function vGtm(){
+  const d = UI.dept;
+  const items = S.gtm.filter(g => g.dept===d);
+  const tabs = DEPTS.map(x => { const it=S.gtm.filter(g=>g.dept===x); const done=it.filter(g=>g.status==="done").length; return `<button class="dept-tab" data-dept="${esc(x)}" aria-pressed="${x===d}"><b>${esc(x)}</b><span class="small muted">${done} of ${it.length} ready</span><div class="bar"><i style="width:${it.length?done/it.length*100:0}%"></i></div></button>`; }).join("");
+  const ppl = people();
+  return `<div class="view-head"><div><h2>Go-to-market readiness</h2><p>What each department needs to settle alongside product development, laid out by release phase. Assign an owner, track status, or turn any point into an action item.</p></div>
+    <button class="btn primary" data-act="add-gtm">Add consideration</button></div>
+  <div class="dept-tabs" role="group" aria-label="Department">${tabs}</div>
+  <div class="phases">${PHASES.map(p => { const its = items.filter(g=>g.phase===p); return `<section class="phase"><h3>${p}<small>${its.length}</small></h3>${its.map(g=>`<div class="gitem ${g.status==="done"?"done":""}">
+      <div class="q">${esc(g.question)}</div><div class="g">${esc(g.guidance)}</div>
+      <div class="gfoot">${[["todo","To do"],["doing","In progress"],["done","Done"]].map(([k,l])=>`<button class="st ${k}" data-gst="${k}" data-id="${esc(g.id)}" aria-pressed="${(g.status||"todo")===k}">${l}</button>`).join("")}</div>
+      <input type="text" list="pplList" data-gowner="${esc(g.id)}" value="${esc(g.owner)}" placeholder="Assign an owner" aria-label="Owner" style="margin-top:8px;padding:5px 8px;font-size:.84rem"><div class="gfoot" style="margin-top:6px"><button class="btn sm ghost" data-act="gtm-action" data-id="${esc(g.id)}" title="Create an action item from this point">To action</button><button class="btn sm ghost" data-act="edit-gtm" data-id="${esc(g.id)}" aria-label="Edit">Edit</button></div>
+    </div>`).join("") || `<p class="small muted">Nothing for this phase.</p>`}</section>`; }).join("")}</div>
+  <datalist id="pplList">${ppl.map(p=>`<option value="${esc(p)}">`).join("")}</datalist>`;
+}
+function gtmForm(g){
+  g = g || {dept:UI.dept, phase:"Now", status:"todo"};
+  openModal(g.id?"Edit consideration":"Add consideration", `<div class="stack">
+    <div class="grid2"><div><label class="f" for="g_d">Department</label><select id="g_d">${DEPTS.map(x=>`<option ${g.dept===x?"selected":""}>${x}</option>`).join("")}</select></div>
+    <div><label class="f" for="g_p">Phase</label><select id="g_p">${PHASES.map(x=>`<option ${g.phase===x?"selected":""}>${x}</option>`).join("")}</select></div></div>
+    <div><label class="f" for="g_q">Question to settle</label><input type="text" id="g_q" value="${esc(g.question)}"></div>
+    <div><label class="f" for="g_g">Recommended approach</label><textarea id="g_g" rows="4">${esc(g.guidance)}</textarea></div></div>`,
+    `${g.id?`<button class="btn danger" id="g_del">Delete</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="g_save">Save</button>`);
+  $("#g_save").onclick = async () => { const q=$("#g_q").value.trim(); if (!q) return toast("Write the question first."); const body={...g, dept:$("#g_d").value, phase:$("#g_p").value, question:q, guidance:$("#g_g").value.trim()}; const id=g.id||uid("gtm"); delete body.id; if (body.order==null) body.order = 900+S.gtm.length; if (await write("gtm", id, body)) { closeModal(); toast("Saved"); } };
+  if (g.id) $("#g_del").onclick = async () => { if (confirm("Delete this consideration?")) { if (await remove("gtm", g.id)) { closeModal(); toast("Deleted"); } } };
+}
+
+/* ---------- modal ---------- */
+function openModal(title, body, foot){
+  const m = $("#modal");
+  m.innerHTML = `<div class="m-head"><h3>${esc(title)}</h3><button class="btn ghost sm" data-close aria-label="Close">Close</button></div><div class="m-body">${body}</div><div class="m-foot">${foot}</div>`;
+  m.querySelectorAll("[data-close]").forEach(b => b.onclick = closeModal);
+  if (!m.open) m.showModal();
+}
+function closeModal(){ const m=$("#modal"); if (m.open) m.close(); }
+$("#lightbox").onclick = () => $("#lightbox").classList.remove("open");
+document.addEventListener("keydown", e => { if (e.key==="Escape") $("#lightbox").classList.remove("open"); });
+
+/* ---------- event binding ---------- */
+function bind(root){
+  root.querySelectorAll("[data-act]").forEach(el => el.onclick = e => {
+    const id = el.dataset.id, act = el.dataset.act;
+    const find = (col) => S[col].find(x => x.id===id);
+    switch(act){
+      case "gen-status": genStatus(el); break;
+      case "add-doc": docForm(); break;
+      case "edit-doc": docForm(find("docs")); break;
+      case "import-comments": importComments(find("docs")); break;
+      case "view-comments": viewComments(find("docs")); break;
+      case "add-action": actionForm(); break;
+      case "edit-action": actionForm(find("actions")); break;
+      case "toggle": { const a=find("actions"); const done = a.status!=="done"; write("actions", id, {status:done?"done":"open", doneAt:done?new Date().toISOString():null}, true).then(ok=>ok&&toast(done?"Marked complete":"Reopened")); break; }
+      case "import-transcript": transcriptForm(); break;
+      case "edit-meeting": meetingForm(find("meetings")); break;
+      case "copy-summary": { const t = summaryText(find("meetings")); (navigator.clipboard?.writeText(t) || Promise.reject()).then(()=>toast("Summary copied"), ()=>{ openModal("Copy summary", `<textarea rows="16" id="cpy">${esc(t)}</textarea>`, `<button class="btn" data-close>Close</button>`); $("#cpy").select(); }); break; }
+      case "add-iface": ifaceForm(); break;
+      case "edit-iface": ifaceForm(find("interfaces")); break;
+      case "add-gtm": gtmForm(); break;
+      case "edit-gtm": gtmForm(find("gtm")); break;
+      case "gtm-action": { const g=find("gtm"); actionForm({title:g.question, detail:g.guidance, owner:g.owner||"", status:"open", priority:"normal", workstream:"gtm", category:g.dept, subcategory:g.phase, source:{type:"gtm", gtmId:g.id, label:g.dept}}); break; }
+    }
+  });
+  root.querySelectorAll("[data-go-cat]").forEach(el => el.onclick = e => { e.preventDefault(); UI.af = {...UI.af, cat:el.dataset.goCat, ws:"", owner:"", q:"", status:"open"}; go("actions"); });
+  root.querySelectorAll("[data-open-meeting]").forEach(el => el.onclick = e => { e.preventDefault(); UI.meeting = el.dataset.openMeeting; go("meetings"); });
+  root.querySelectorAll("[data-meeting]").forEach(el => el.onclick = () => { UI.meeting = el.dataset.meeting; render(); });
+  root.querySelectorAll("[data-af]").forEach(el => el.onclick = () => { UI.af[el.dataset.af] = el.dataset.v; render(); });
+  root.querySelectorAll("[data-af-sel]").forEach(el => el.onchange = () => { UI.af[el.dataset.afSel] = el.value; render(); });
+  const q = root.querySelector("[data-af-q]");
+  if (q) q.oninput = () => { UI.af.q = q.value; clearTimeout(bind._q); bind._q = setTimeout(() => { render(); const n=$("[data-af-q]"); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length);} }, 250); };
+  root.querySelectorAll("[data-zoom]").forEach(el => el.onclick = () => { const lb=$("#lightbox"); lb.querySelector("img").src = el.dataset.zoom; lb.classList.add("open"); });
+  root.querySelectorAll("[data-dept]").forEach(el => el.onclick = () => { UI.dept = el.dataset.dept; render(); });
+  root.querySelectorAll("[data-gst]").forEach(el => el.onclick = () => write("gtm", el.dataset.id, {status:el.dataset.gst}, true));
+  root.querySelectorAll("[data-gowner]").forEach(el => el.onchange = () => write("gtm", el.dataset.gowner, {owner:el.value.trim()}, true));
+}
+
+/* ---------- boot ---------- */
+dbState = "loading";
+$("#importBtn").onclick = () => $("#importFile").click();
+$("#importFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!confirm("Import this data file? Items with the same id will be replaced.")) return;
+    const r = await api("POST", "/api/import", data);
+    toast(`${r.imported} items imported`); cursor = null; for (const k in RAW) RAW[k] = {}; poll();
+  } catch(err){ toast(err.message || "This file could not be imported. Use a backup downloaded from this dashboard."); }
+  e.target.value = "";
+};
+render();
+(async () => {
+  try {
+    const me = await api("GET", "/api/me");
+    $("#whoami").textContent = "Signed in as " + me.name;
+    sample = me.ai ? { json: async (prompt, opts={}) => (await api("POST", "/api/ai", {prompt, tier: opts.modelTier || "default"})).result } : null;
+    assets = { upload: async file => {
+      const fd = new FormData(); fd.append("file", file);
+      const r = await fetch("/api/files", {method:"POST", body:fd, credentials:"same-origin"});
+      if (!r.ok) throw new Error("upload failed");
+      return r.json();
+    }};
+  } catch(e){}
+  await poll();
+  setInterval(poll, 8000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+})();
+})();
+</script>
+</body>
+</html>
