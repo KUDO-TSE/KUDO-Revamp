@@ -5,4 +5,3 @@ venv/
 .env
 local.db
 *backup*.json
-*initial-data*.json

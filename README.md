@@ -22,7 +22,7 @@ Flask + Postgres, deployed on Railway. Everyone signs in with their name and the
 
 ## First run
 
-Sign in, then use **Import data file** in the sidebar with `kudo-revamp-initial-data.json` (kept out of this repo on purpose because it holds internal content). Use **Download a backup** any time to export everything, images included.
+On startup the app loads `seed/initial-data.json` (documents, meeting, action items, interfaces with previews, go-to-market plan). It only adds records that have never existed, so edits and deletions are never overwritten. Use **Download a backup** any time to export everything, images included.
 
 ## Local development
 
@@ -34,4 +34,4 @@ Without `DATABASE_URL` the app uses a local SQLite file (`local.db`).
 
 ## Confidentiality
 
-Contains internal KUDO project information. Keep this repository private and share the password only with KUDO team members.
+Contains internal KUDO project information. The seed file holds internal content: keep this repository private and share the password only with KUDO team members.

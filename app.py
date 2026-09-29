@@ -92,6 +92,36 @@ def init_db():
 init_db()
 
 
+def seed_missing():
+    """Load seed/initial-data.json on startup, adding only records that have never existed.
+
+    Items already in the database (including ones people edited or deleted) are left alone,
+    so this is safe to run on every deploy.
+    """
+    path = os.path.join(BASE_DIR, "seed", "initial-data.json")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    existing = {(c, i) for c, i in q("SELECT collection,id FROM records", fetch=True)}
+    have_files = {r[0] for r in q("SELECT id FROM files", fetch=True)}
+    ignore = "ON CONFLICT (id) DO NOTHING" if IS_PG else ""
+    verb = "INSERT" if IS_PG else "INSERT OR IGNORE"
+    for fid, f in (payload.get("files") or {}).items():
+        if fid not in have_files:
+            q(f"{verb} INTO files (id,content_type,data,created_at,created_by) VALUES (?,?,?,?,?) {ignore}",
+              (fid, f.get("contentType", "image/jpeg"), base64.b64decode(f.get("b64", "")), time.time(), "Initial data"))
+    added = 0
+    for col in COLLECTIONS:
+        for rid, data in (payload.get(col) or {}).items():
+            if (col, rid) not in existing and isinstance(data, dict):
+                put_record(col, rid, data, "Initial data")
+                added += 1
+    if added:
+        app.logger.warning("Seeded %s records from initial-data.json", added)
+
+
+
 def get_record(col, rid):
     rows = q("SELECT data, deleted FROM records WHERE collection=? AND id=?", (col, rid), fetch=True)
     if not rows or rows[0][1]:
@@ -394,6 +424,13 @@ def ai():
 @login_required()
 def static_files(p):
     return send_from_directory(os.path.join(BASE_DIR, "static"), p)
+
+
+
+try:
+    seed_missing()
+except Exception as exc:  # never block startup on seeding
+    app.logger.warning("Seeding skipped: %s", exc)
 
 
 if __name__ == "__main__":
