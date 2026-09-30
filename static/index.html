@@ -277,7 +277,6 @@ dialog::backdrop{background:rgba(6,18,28,.55)}
     <div class="side-foot">
       <div id="whoami"></div>
       <div>Internal and confidential. Share only with KUDO team members.</div>
-      <button id="importBtn" type="button">Import data file</button><input type="file" id="importFile" accept=".json" hidden>
       <a id="exportBtn" href="/api/export" style="color:#C9D8E4;font-size:.78rem">Download a backup</a>
       <button id="themeBtn" type="button">Switch theme</button>
       <a href="/logout" style="color:#C9D8E4;font-size:.78rem">Sign out</a>
@@ -1042,17 +1041,6 @@ function bind(root){
 
 /* ---------- boot ---------- */
 dbState = "loading";
-$("#importBtn").onclick = () => $("#importFile").click();
-$("#importFile").onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try {
-    const data = JSON.parse(await f.text());
-    if (!confirm("Import this data file? Items with the same id will be replaced.")) return;
-    const r = await api("POST", "/api/import", data);
-    toast(`${r.imported} items imported`); cursor = null; for (const k in RAW) RAW[k] = {}; poll();
-  } catch(err){ toast(err.message || "This file could not be imported. Use a backup downloaded from this dashboard."); }
-  e.target.value = "";
-};
 render();
 (async () => {
   try {
