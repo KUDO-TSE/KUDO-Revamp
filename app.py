@@ -372,21 +372,35 @@ def ai():
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
                      "content-type": "application/json"},
-            json={"model": model, "max_tokens": 8000,
+            json={"model": model, "max_tokens": 12000,
                   "system": "You return only one valid JSON object. No markdown fences, no commentary before or after.",
                   "messages": [{"role": "user", "content": prompt}]},
-            timeout=170)
-    except requests.RequestException:
+            timeout=240)
+    except requests.Timeout:
+        app.logger.warning("Anthropic API timeout (prompt %s chars)", len(prompt))
+        return jsonify(error="The AI service took too long to answer. Try again."), 504
+    except requests.RequestException as exc:
+        app.logger.warning("Anthropic API unreachable: %s", exc)
         return jsonify(error="Could not reach the AI service. Try again."), 502
     if r.status_code == 429:
         return jsonify(error="The AI service is busy. Wait a minute and try again."), 429
     if not r.ok:
         app.logger.warning("Anthropic API error %s: %s", r.status_code, r.text[:500])
-        return jsonify(error="The AI service returned an error. Try again."), 502
-    text = "".join(b.get("text", "") for b in r.json().get("content", []) if b.get("type") == "text")
+        detail = ""
+        try:
+            detail = r.json().get("error", {}).get("message", "")
+        except ValueError:
+            pass
+        return jsonify(error="The AI service returned an error" + (f": {detail}" if detail else ". Try again.")), 502
+    data = r.json()
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    if data.get("stop_reason") == "max_tokens":
+        app.logger.warning("Anthropic answer cut off at max_tokens (prompt %s chars)", len(prompt))
+        return jsonify(error="The AI answer was too long and got cut off. Try again with less content."), 502
     try:
         return jsonify(result=extract_json(text))
     except ValueError:
+        app.logger.warning("Unreadable AI answer: %s", text[:500])
         return jsonify(error="The AI answer could not be read. Try again."), 502
 
 

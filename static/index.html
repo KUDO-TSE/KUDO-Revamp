@@ -342,7 +342,7 @@ const hue = n => { let h=0; for (const c of String(n)) h=(h*31+c.charCodeAt(0))%
 const initials = n => String(n||"?").split(/[\s&]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
 const ownerHtml = n => n ? `<span class="owner"><span class="avatar" style="background:hsl(${hue(n)} 45% 42%)">${esc(initials(n))}</span>${esc(n)}</span>` : `<span class="owner muted">Unassigned</span>`;
 const wsChip = w => WS[w] ? `<span class="chip ws-${w}">${esc(WS[w].short)}</span>` : "";
-function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
+function toast(msg){ const t=$("#toast"); const dlg=$("#modal"); const host = dlg && dlg.open ? dlg : document.body; if (t.parentNode !== host) host.appendChild(t); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
 
 /* ---------- theme ---------- */
 try { const th = localStorage.getItem("kudo-revamp-theme"); if (th) document.documentElement.dataset.theme = th; } catch(e){}
@@ -717,23 +717,38 @@ function importComments(d){
   $("#usePaste").onclick = () => { const t=$("#paste").value.trim(); if (!t) return; show(t.split(/\n(?=[^\n:]{1,40}:)/).map((l,i)=>{ const m=l.match(/^([^:\n]{1,40}):\s*([\s\S]*)$/); return {cid:"p"+i, author:m?m[1].trim():"Unknown", text:(m?m[2]:l).trim(), anchor:"", replies:[], done:false}; })); };
   go.onclick = async () => {
     await write("docs", d.id, {comments: comments.slice(0,300), commentsImportedAt:new Date().toISOString()}, true);
-    go.disabled = true; go.innerHTML = `<span class="spinner"></span> Finding action items`;
     const open = comments.filter(c=>!c.done);
-    const prompt = `You help run KUDO's platform revamp. Below are the open comment threads from the document "${d.title}" (workstream: ${WS[d.workstream]?.label||d.workstream}, topic: ${d.category||""} ${d.subcategory?"/ "+d.subcategory:""}).
+    const BATCH = 15;
+    const batches = []; for (let i=0; i<open.length; i+=BATCH) batches.push(open.slice(i, i+BATCH));
+    out.querySelectorAll(".banner.err").forEach(n=>n.remove());
+    go.disabled = true;
+    const found = [];
+    for (let bi=0; bi<batches.length; bi++) {
+      go.innerHTML = `<span class="spinner"></span> Finding action items${batches.length>1?` (part ${bi+1} of ${batches.length})`:""}`;
+      const prompt = `You help run KUDO's platform revamp. Below are open comment threads from the document "${d.title}" (workstream: ${WS[d.workstream]?.label||d.workstream}, topic: ${d.category||""} ${d.subcategory?"/ "+d.subcategory:""}).
 
 Identify the pending action items: things someone still needs to do, decide, answer or provide. Skip threads that are fully answered in their replies, pure acknowledgements, and duplicates. Merge threads that ask for the same thing.
 For each item give an owner: the person the comment is addressed to or who is expected to act (look for @mentions, names and "can you" requests). If a question is not addressed to anyone, the owner is whoever is best placed according to the thread; if still unclear use "Unassigned". Use names exactly as they appear. Never invent people.
-Write each task as a short imperative sentence (max 16 words) plus one sentence of context. No em dashes.
+Write each task as a short imperative sentence (max 16 words) and one short sentence of context (max 25 words). No em dashes.
 Known team members: ${people().join(", ")}.
 
 Return JSON only: {"items":[{"task":"...","context":"...","owner":"...","commentIds":["..."]}]}
 
 Comments:
-${JSON.stringify(open.map(c=>({id:c.cid, author:c.author, date:c.date, onText:c.anchor, comment:c.text, replies:c.replies})))}`;
-    try {
-      const r = await sample.json(prompt, {modelTier:"default"});
-      proposeActions(r.items||[], {type:"doc", docId:d.id, label:d.title}, {workstream:d.workstream, category:d.category, subcategory:d.subcategory});
-    } catch(e){ handleSampleErr(e); go.disabled=false; go.textContent="Find action items"; }
+${JSON.stringify(batches[bi].map(c=>({id:c.cid, author:c.author, date:c.date, onText:(c.anchor||"").slice(0,200), comment:c.text, replies:c.replies})))}`;
+      try {
+        const r = await sample.json(prompt, {modelTier:"default"});
+        found.push(...(r.items||[]));
+      } catch(e){
+        console.warn(e);
+        const msg = e?.message || "Claude could not complete that request.";
+        out.insertAdjacentHTML("afterbegin", `<div class="banner err">${esc(msg)}${found.length?` ${found.length} action item${found.length===1?" was":"s were"} found before this, shown next.`:" Try again in a moment."}</div>`);
+        out.scrollIntoView({block:"start"});
+        break;
+      }
+    }
+    go.disabled = false; go.textContent = "Find action items";
+    if (found.length || !out.querySelector(".banner.err")) proposeActions(found, {type:"doc", docId:d.id, label:d.title}, {workstream:d.workstream, category:d.category, subcategory:d.subcategory});
   };
 }
 function wireDrop(zone, input, onFile){
