@@ -702,7 +702,16 @@ function importComments(d){
     </div>`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="cm_go" disabled>Find action items</button>`);
   let comments = null;
   const out = $("#cm_out"), go = $("#cm_go");
-  const show = list => { comments = list; out.innerHTML = `<h3 style="margin:6px 0 10px">${list.length} comment thread${list.length===1?"":"s"} found, ${list.filter(c=>!c.done).length} still open</h3>` + commentsHtml(list); go.disabled = !list.filter(c=>!c.done).length || !sample; if (!sample) out.insertAdjacentHTML("afterbegin", `<div class="banner">AI is not set up on the server yet, so action items cannot be extracted automatically. Comments are still saved.</div>`); };
+  const show = async list => {
+    comments = list;
+    const open = list.filter(c=>!c.done).length;
+    out.innerHTML = `<h3 style="margin:6px 0 10px">${list.length} comment thread${list.length===1?"":"s"} found, ${open} still open</h3>` + commentsHtml(list);
+    const ai = sample ? true : await refreshAI();
+    go.disabled = !open || !ai;
+    if (!list.length) out.insertAdjacentHTML("afterbegin", `<div class="banner">No comments were found in this file. Check that you downloaded the version that has the comments (in SharePoint: File, Save a copy, Download a copy).</div>`);
+    else if (!open) out.insertAdjacentHTML("afterbegin", `<div class="banner">Every comment thread in this file is resolved, so there is nothing pending to turn into action items.</div>`);
+    else if (!ai) out.insertAdjacentHTML("afterbegin", `<div class="banner">The AI service could not be reached, so action items cannot be extracted right now. Reload the page and try again. If it keeps happening, check ANTHROPIC_API_KEY in Railway.</div>`);
+  };
   const onFile = async f => { if (!f) return; out.innerHTML = `<span class="spinner"></span> Reading ${esc(f.name)}`; try { show(await parseDocxComments(f)); } catch(e){ out.innerHTML = `<div class="banner">${esc(e.message||"This file could not be read. Check that it is a .docx file.")}</div>`; } };
   wireDrop($("#drop"), $("#file"), onFile);
   $("#usePaste").onclick = () => { const t=$("#paste").value.trim(); if (!t) return; show(t.split(/\n(?=[^\n:]{1,40}:)/).map((l,i)=>{ const m=l.match(/^([^:\n]{1,40}):\s*([\s\S]*)$/); return {cid:"p"+i, author:m?m[1].trim():"Unknown", text:(m?m[2]:l).trim(), anchor:"", replies:[], done:false}; })); };
@@ -867,7 +876,8 @@ async function readTranscriptFile(f){
   }
   return await f.text();
 }
-function transcriptForm(){
+async function transcriptForm(){
+  if (!sample) await refreshAI();
   openModal("Import meeting transcript", `
     <div class="stack">
       <div class="grid2">
@@ -1090,13 +1100,19 @@ function bind(root){
 }
 
 /* ---------- boot ---------- */
-dbState = "loading";
-render();
-(async () => {
+async function refreshAI(){
   try {
     const me = await api("GET", "/api/me");
     $("#whoami").textContent = "Signed in as " + me.name;
     sample = me.ai ? { json: async (prompt, opts={}) => (await api("POST", "/api/ai", {prompt, tier: opts.modelTier || "default"})).result } : null;
+  } catch(e){}
+  return !!sample;
+}
+dbState = "loading";
+render();
+(async () => {
+  try {
+    await refreshAI();
     assets = { upload: async file => {
       const fd = new FormData(); fd.append("file", file);
       const r = await fetch("/api/files", {method:"POST", body:fd, credentials:"same-origin"});
