@@ -92,63 +92,6 @@ def init_db():
 init_db()
 
 
-def seed_missing():
-    """Load seed/initial-data.json on startup, adding only records that have never existed.
-
-    Items already in the database (including ones people edited or deleted) are left alone,
-    so this is safe to run on every deploy.
-    """
-    path = os.path.join(BASE_DIR, "seed", "initial-data.json")
-    if not os.path.exists(path):
-        return
-    with open(path, encoding="utf-8") as fh:
-        payload = json.load(fh)
-    existing = {(c, i) for c, i in q("SELECT collection,id FROM records", fetch=True)}
-    have_files = {r[0] for r in q("SELECT id FROM files", fetch=True)}
-    ignore = "ON CONFLICT (id) DO NOTHING" if IS_PG else ""
-    verb = "INSERT" if IS_PG else "INSERT OR IGNORE"
-    for fid, f in (payload.get("files") or {}).items():
-        if fid not in have_files:
-            q(f"{verb} INTO files (id,content_type,data,created_at,created_by) VALUES (?,?,?,?,?) {ignore}",
-              (fid, f.get("contentType", "image/jpeg"), base64.b64decode(f.get("b64", "")), time.time(), "Initial data"))
-    added = 0
-    for col in COLLECTIONS:
-        for rid, data in (payload.get(col) or {}).items():
-            if (col, rid) not in existing and isinstance(data, dict):
-                put_record(col, rid, data, "Initial data")
-                added += 1
-    if added:
-        app.logger.warning("Seeded %s records from initial-data.json", added)
-    run_migrations()
-
-
-# One-off data changes, each applied once and recorded in settings/migrations.
-MIGRATIONS = {
-    "2026-09-interface-sections": [
-        ("interfaces", "ifc-producer", "category", "Producer Console", "Producer Interface"),
-        ("interfaces", "ifc-operator", "category", "Operator Console", "Operator Interface"),
-    ],
-}
-
-
-def run_migrations():
-    log = get_record("settings", "migrations") or {"done": []}
-    changed = False
-    for name, steps in MIGRATIONS.items():
-        if name in log["done"]:
-            continue
-        for col, rid, field, old, new in steps:
-            rec = get_record(col, rid)
-            if rec is not None and rec.get(field) == old:
-                rec[field] = new
-                put_record(col, rid, rec, "Update")
-        log["done"].append(name)
-        changed = True
-    if changed:
-        put_record("settings", "migrations", log, "Update")
-
-
-
 def get_record(col, rid):
     rows = q("SELECT data, deleted FROM records WHERE collection=? AND id=?", (col, rid), fetch=True)
     if not rows or rows[0][1]:
@@ -452,6 +395,84 @@ def ai():
 def static_files(p):
     return send_from_directory(os.path.join(BASE_DIR, "static"), p)
 
+
+# ------------------------------------------------------- seed + migrations
+def seed_missing():
+    """Load seed/initial-data.json on startup, adding only records that have never existed.
+
+    Items already in the database (including ones people edited or deleted) are left alone,
+    so this is safe to run on every deploy.
+    """
+    path = os.path.join(BASE_DIR, "seed", "initial-data.json")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    existing = {(c, i) for c, i in q("SELECT collection,id FROM records", fetch=True)}
+    have_files = {r[0] for r in q("SELECT id FROM files", fetch=True)}
+    ignore = "ON CONFLICT (id) DO NOTHING" if IS_PG else ""
+    verb = "INSERT" if IS_PG else "INSERT OR IGNORE"
+    for fid, f in (payload.get("files") or {}).items():
+        if fid not in have_files:
+            q(f"{verb} INTO files (id,content_type,data,created_at,created_by) VALUES (?,?,?,?,?) {ignore}",
+              (fid, f.get("contentType", "image/jpeg"), base64.b64decode(f.get("b64", "")), time.time(), "Initial data"))
+    added = 0
+    for col in COLLECTIONS:
+        for rid, data in (payload.get(col) or {}).items():
+            if (col, rid) not in existing and isinstance(data, dict):
+                put_record(col, rid, data, "Initial data")
+                added += 1
+    if added:
+        app.logger.warning("Seeded %s records from initial-data.json", added)
+    run_migrations(payload)
+
+
+# One-off data changes, each applied once and recorded in settings/migrations.
+def _m_interface_sections(payload):
+    for rid, old, new in (("ifc-producer", "Producer Console", "Producer Interface"),
+                          ("ifc-operator", "Operator Console", "Operator Interface")):
+        rec = get_record("interfaces", rid)
+        if rec is not None and rec.get("category") == old:
+            rec["category"] = new
+            put_record("interfaces", rid, rec, "Update")
+
+
+def _m_gtm_tracks(payload):
+    """Split go-to-market points by release track and apply revised wording.
+
+    Owners and statuses are kept. Wording is only replaced if nobody edited it.
+    """
+    revisions = payload.get("gtm_revisions") or {}
+    for rid, seed in (payload.get("gtm") or {}).items():
+        rec = get_record("gtm", rid)
+        if rec is None:
+            continue
+        rec["track"] = rec.get("track") or seed.get("track")
+        rec["order"] = seed.get("order", rec.get("order"))
+        before = revisions.get(rid)
+        if before and rec.get("question") == before["question"] and rec.get("guidance") == before["guidance"]:
+            for k in ("question", "guidance", "phase", "dept"):
+                rec[k] = seed[k]
+        put_record("gtm", rid, rec, "Update")
+
+
+MIGRATIONS = [
+    ("2026-09-interface-sections", _m_interface_sections),
+    ("2026-09-gtm-tracks", _m_gtm_tracks),
+]
+
+
+def run_migrations(payload):
+    log = get_record("settings", "migrations") or {"done": []}
+    changed = False
+    for name, fn in MIGRATIONS:
+        if name in log["done"]:
+            continue
+        fn(payload)
+        log["done"].append(name)
+        changed = True
+    if changed:
+        put_record("settings", "migrations", log, "Update")
 
 
 try:

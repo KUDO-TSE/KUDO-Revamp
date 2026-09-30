@@ -212,6 +212,30 @@ label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin
 .sec-docs .doc-row{padding:6px 0}
 .meet-sec{margin-top:30px;scroll-margin-top:calc(16px + env(safe-area-inset-top,0px))}
 /* gtm */
+.gtm-tracks{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:26px}
+.tcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;--c:var(--ws-a);--cs:var(--ws-a-soft)}
+.tcard.backend{--c:var(--ws-b);--cs:var(--ws-b-soft)}
+.tcard[aria-current="true"]{border:2px solid var(--c)}
+.tcard>header{background:var(--c);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;border:0;width:100%;text-align:left;font:inherit}
+.tcard>header h3{color:#fff;font-size:1.15rem}
+.tcard>header p{margin:3px 0 0;font-size:.8rem;opacity:.92;max-width:44ch}
+.tcard .pct{font:760 1.9rem/1 var(--display);text-align:right;white-space:nowrap}
+.tcard .pct small{display:block;font:500 .74rem var(--body);opacity:.9;margin-top:4px}
+.drows{padding:8px 10px 12px}
+.drow{display:grid;grid-template-columns:1fr 64px 90px;gap:10px;align-items:center;width:100%;background:none;border:0;padding:6px 8px;border-radius:6px;cursor:pointer;text-align:left;font-size:.88rem;color:var(--text)}
+.drow:hover{background:var(--sunk)}
+.drow[aria-pressed="true"]{background:var(--cs);font-weight:650}
+.drow .n{color:var(--muted);font-size:.8rem;text-align:right}
+.drow .bar i{background:var(--c)}
+.board{--c:var(--ws-a);scroll-margin-top:calc(12px + env(safe-area-inset-top,0px))}
+.board.backend{--c:var(--ws-b)}
+.board-head{border-top:6px solid var(--c);padding-top:12px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:baseline}
+.board-head h2{font-size:1.3rem}
+.board .phase h3{border-bottom-color:var(--c)}
+.board .dept-tab[aria-pressed="true"]{border-color:var(--c);box-shadow:inset 0 -3px 0 var(--c)}
+.board .dept-tab .bar i{background:var(--c)}
+.gitem .dtag{font-size:.72rem;font-weight:650;color:var(--c);margin-bottom:4px;display:block}
+@media (max-width:900px){.gtm-tracks{grid-template-columns:1fr}}
 .dept-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
 .dept-tab{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;cursor:pointer;text-align:left;min-width:150px}
 .dept-tab[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 -3px 0 var(--signal)}
@@ -297,10 +321,15 @@ const WS = {
   gtm: {label:"Go-to-market", short:"Go-to-market"},
 };
 const PHASES = ["Now","Alpha","Beta","Launch","Post-launch"];
-const DEPTS = ["Sales","Client Managers","Operations","Marketing","Technical Support","Launch governance"];
+const DEPTS = ["Launch governance","Sales","Client Managers","Operations","Interpreter network","Marketing","Technical Support","Legal & compliance","Product & analytics","Finance"];
+const TRACKS = {
+  backend: {label:"Ops backend (MS & LS)", who:"Internal change: MS and LS teams, freelance interpreters and operators, staffing automation."},
+  interfaces: {label:"Interface revamp", who:"External launch: clients, interpreters, operators, producers, participants and viewers."},
+};
+const trackOf = g => g.track === "backend" ? "backend" : "interfaces";
 const IFACE_STATUS = ["Concept","In design","In review","Approved","In build","Released"];
 const S = {docs:[],actions:[],meetings:[],interfaces:[],gtm:[],status:null,team:[],loaded:false};
-const UI = {view:"status", scrollTo:null, af:{status:"open",owner:"",ws:"",cat:"",q:"",group:"owner"}, meeting:null, dept:"Sales"};
+const UI = {view:"status", scrollTo:null, af:{status:"open",owner:"",ws:"",cat:"",q:"",group:"owner"}, meeting:null, dept:"Sales", track:"interfaces"};
 let db=null, sample=null, assets=null, readOnly=false, dbState="loading";
 
 const $ = s => document.querySelector(s);
@@ -450,7 +479,7 @@ function vStatus(){
   const st = S.status;
   const oa = openActions(), over = oa.filter(isOver).length;
   const gtmDone = S.gtm.filter(g=>g.status==="done").length;
-  const gtmPct = S.gtm.length ? Math.round(gtmDone/S.gtm.length*100) : 0;
+  const gB = gtmStats(S.gtm.filter(g=>trackOf(g)==="backend")), gI = gtmStats(S.gtm.filter(g=>trackOf(g)==="interfaces"));
   const lastMeeting = S.meetings[0];
   const canAsk = !!sample;
   const headline = st ? esc(clean(st.headline)) : "No status brief yet";
@@ -483,7 +512,8 @@ function vStatus(){
       <div class="stat"><b>${oa.length}</b><span>Open action items</span></div>
       <div class="stat"><b style="color:${over?"var(--bad)":"inherit"}">${over}</b><span>Overdue</span></div>
       <div class="stat"><b>${S.meetings.length}</b><span>Meetings logged</span></div>
-      <div class="stat"><b>${gtmPct}%</b><span>Go-to-market readiness</span></div>
+      <div class="stat"><b>${gB.pct}%</b><span>GTM readiness, Ops backend</span></div>
+      <div class="stat"><b>${gI.pct}%</b><span>GTM readiness, Interfaces</span></div>
     </div>
   </section>
   <div class="lists">
@@ -501,7 +531,7 @@ async function genStatus(btn){
     meetings: S.meetings.map(m=>({title:m.title, date:m.date, workstream:m.workstream, category:m.category, subcategory:m.subcategory, keyOutcomes:m.summary?.keyOutcomes, decisions:(m.summary?.decisions||[]).map(d=>d.heading+": "+d.text+((d.points||[]).length?" ("+d.points.map(p=>p.label+": "+p.text).join("; ")+")":"")), requirements:(m.summary?.requirements||[]).map(r=>r.heading+": "+r.text)})),
     actionItems: S.actions.map(a=>({task:a.title, owner:a.owner||"Unassigned", status:a.status, due:a.due||null, overdue:isOver(a), workstream:a.workstream, category:a.category})),
     interfaces: S.interfaces.map(i=>({name:i.name, workstream:i.workstream, status:i.status})),
-    goToMarket: DEPTS.map(d=>{ const it=S.gtm.filter(g=>g.dept===d); return {department:d, done:it.filter(g=>g.status==="done").length, inProgress:it.filter(g=>g.status==="doing").map(g=>g.question), total:it.length}; }),
+    goToMarket: Object.keys(TRACKS).map(k=>({track:TRACKS[k].label, departments: DEPTS.map(d=>{ const it=S.gtm.filter(g=>trackOf(g)===k && g.dept===d); return {department:d, done:it.filter(g=>g.status==="done").length, inProgress:it.filter(g=>g.status==="doing").map(g=>g.question), total:it.length}; }).filter(x=>x.total)})),
     today: today()
   };
   const prompt = `You are the program lead's analyst for KUDO's platform revamp. The revamp has two workstreams: "Interface revamp" (redesign of KUDO interfaces and roles, driven by the KUDO Interface Suite PRD) and "Ops backend (MS & LS)" (a new operations back-end for Meeting Services and Language Services, including the LS & MS dashboards and staffing automation). There is also go-to-market readiness across departments.
@@ -950,30 +980,49 @@ function ifaceForm(i){
 }
 
 /* ---------- go-to-market ---------- */
+function gtmStats(list){ const done=list.filter(g=>g.status==="done").length; return {done, total:list.length, pct:list.length?Math.round(done/list.length*100):0}; }
 function vGtm(){
-  const d = UI.dept;
-  const items = S.gtm.filter(g => g.dept===d);
-  const tabs = DEPTS.map(x => { const it=S.gtm.filter(g=>g.dept===x); const done=it.filter(g=>g.status==="done").length; return `<button class="dept-tab" data-dept="${esc(x)}" aria-pressed="${x===d}"><b>${esc(x)}</b><span class="small muted">${done} of ${it.length} ready</span><div class="bar"><i style="width:${it.length?done/it.length*100:0}%"></i></div></button>`; }).join("");
+  const tk = UI.track;
+  const byTrack = k => S.gtm.filter(g => trackOf(g)===k);
+  const deptsFor = k => DEPTS.filter(d => byTrack(k).some(g=>g.dept===d)).concat([...new Set(byTrack(k).map(g=>g.dept))].filter(d=>!DEPTS.includes(d)));
+  const depts = deptsFor(tk);
+  if (UI.dept!=="__all" && !depts.includes(UI.dept)) UI.dept = depts[0] || "__all";
+  const cards = ["backend","interfaces"].map(k => {
+    const st = gtmStats(byTrack(k));
+    return `<section class="tcard ${k}" aria-current="${k===tk}">
+      <header data-track="${k}" role="button" tabindex="0"><div><h3>${TRACKS[k].label}</h3><p>${TRACKS[k].who}</p></div><div class="pct">${st.pct}%<small>${st.done} of ${st.total} ready</small></div></header>
+      <div class="drows">${deptsFor(k).map(d => { const ds = gtmStats(byTrack(k).filter(g=>g.dept===d)); return `<button class="drow" data-track="${k}" data-dept="${esc(d)}" aria-pressed="${k===tk && UI.dept===d}"><span>${esc(d)}</span><span class="n">${ds.done}/${ds.total}</span><span class="bar"><i style="width:${ds.pct}%"></i></span></button>`; }).join("")}</div>
+    </section>`;
+  }).join("");
+  const items = byTrack(tk).filter(g => UI.dept==="__all" || g.dept===UI.dept);
+  const all = gtmStats(byTrack(tk));
+  const tabs = [`<button class="dept-tab" data-dept="__all" aria-pressed="${UI.dept==="__all"}"><b>All departments</b><span class="small muted">${all.done} of ${all.total} ready</span><div class="bar"><i style="width:${all.pct}%"></i></div></button>`]
+    .concat(depts.map(x => { const st=gtmStats(byTrack(tk).filter(g=>g.dept===x)); return `<button class="dept-tab" data-dept="${esc(x)}" aria-pressed="${x===UI.dept}"><b>${esc(x)}</b><span class="small muted">${st.done} of ${st.total} ready</span><div class="bar"><i style="width:${st.pct}%"></i></div></button>`; })).join("");
   const ppl = people();
-  return `<div class="view-head"><div><h2>Go-to-market readiness</h2><p>What each department needs to settle alongside product development, laid out by release phase. Assign an owner, track status, or turn any point into an action item.</p></div>
+  return `<div class="view-head"><div><h2>Go-to-market readiness</h2><p>Two separate launches with their own plans. The Ops backend is an internal change for our teams and freelancers; the Interface revamp is an external launch for clients and their audiences. Pick a track and a department to see its points by release phase.</p></div>
     <button class="btn primary" data-act="add-gtm">Add consideration</button></div>
-  <div class="dept-tabs" role="group" aria-label="Department">${tabs}</div>
-  <div class="phases">${PHASES.map(p => { const its = items.filter(g=>g.phase===p); return `<section class="phase"><h3>${p}<small>${its.length}</small></h3>${its.map(g=>`<div class="gitem ${g.status==="done"?"done":""}">
-      <div class="q">${esc(g.question)}</div><div class="g">${esc(g.guidance)}</div>
+  <div class="gtm-tracks">${cards}</div>
+  <section class="board ${tk}" id="gtm-board">
+    <div class="board-head"><h2>${TRACKS[tk].label}</h2><span class="muted">${UI.dept==="__all"?"All departments":esc(UI.dept)}, ${items.length} point${items.length===1?"":"s"}</span></div>
+    <div class="dept-tabs" role="group" aria-label="Department">${tabs}</div>
+    <div class="phases">${PHASES.map(p => { const its = items.filter(g=>g.phase===p); return `<section class="phase"><h3>${p}<small>${its.length}</small></h3>${its.map(g=>`<div class="gitem ${g.status==="done"?"done":""}">
+      ${UI.dept==="__all"?`<span class="dtag">${esc(g.dept)}</span>`:""}<div class="q">${esc(g.question)}</div><div class="g">${esc(g.guidance)}</div>
       <div class="gfoot">${[["todo","To do"],["doing","In progress"],["done","Done"]].map(([k,l])=>`<button class="st ${k}" data-gst="${k}" data-id="${esc(g.id)}" aria-pressed="${(g.status||"todo")===k}">${l}</button>`).join("")}</div>
       <input type="text" list="pplList" data-gowner="${esc(g.id)}" value="${esc(g.owner)}" placeholder="Assign an owner" aria-label="Owner" style="margin-top:8px;padding:5px 8px;font-size:.84rem"><div class="gfoot" style="margin-top:6px"><button class="btn sm ghost" data-act="gtm-action" data-id="${esc(g.id)}" title="Create an action item from this point">To action</button><button class="btn sm ghost" data-act="edit-gtm" data-id="${esc(g.id)}" aria-label="Edit">Edit</button></div>
     </div>`).join("") || `<p class="small muted">Nothing for this phase.</p>`}</section>`; }).join("")}</div>
+  </section>
   <datalist id="pplList">${ppl.map(p=>`<option value="${esc(p)}">`).join("")}</datalist>`;
 }
 function gtmForm(g){
-  g = g || {dept:UI.dept, phase:"Now", status:"todo"};
+  g = g || {dept:UI.dept==="__all"?"Sales":UI.dept, phase:"Now", status:"todo", track:UI.track};
   openModal(g.id?"Edit consideration":"Add consideration", `<div class="stack">
+    <div><label class="f" for="g_t">Track</label><select id="g_t">${Object.entries(TRACKS).map(([k,v])=>`<option value="${k}" ${trackOf(g)===k?"selected":""}>${v.label}</option>`).join("")}</select></div>
     <div class="grid2"><div><label class="f" for="g_d">Department</label><select id="g_d">${DEPTS.map(x=>`<option ${g.dept===x?"selected":""}>${x}</option>`).join("")}</select></div>
     <div><label class="f" for="g_p">Phase</label><select id="g_p">${PHASES.map(x=>`<option ${g.phase===x?"selected":""}>${x}</option>`).join("")}</select></div></div>
     <div><label class="f" for="g_q">Question to settle</label><input type="text" id="g_q" value="${esc(g.question)}"></div>
     <div><label class="f" for="g_g">Recommended approach</label><textarea id="g_g" rows="4">${esc(g.guidance)}</textarea></div></div>`,
     `${g.id?`<button class="btn danger" id="g_del">Delete</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="g_save">Save</button>`);
-  $("#g_save").onclick = async () => { const q=$("#g_q").value.trim(); if (!q) return toast("Write the question first."); const body={...g, dept:$("#g_d").value, phase:$("#g_p").value, question:q, guidance:$("#g_g").value.trim()}; const id=g.id||uid("gtm"); delete body.id; if (body.order==null) body.order = 900+S.gtm.length; if (await write("gtm", id, body)) { closeModal(); toast("Saved"); } };
+  $("#g_save").onclick = async () => { const q=$("#g_q").value.trim(); if (!q) return toast("Write the question first."); const body={...g, track:$("#g_t").value, dept:$("#g_d").value, phase:$("#g_p").value, question:q, guidance:$("#g_g").value.trim()}; const id=g.id||uid("gtm"); delete body.id; if (body.order==null) body.order = 900+S.gtm.length; if (await write("gtm", id, body)) { closeModal(); toast("Saved"); } };
   if (g.id) $("#g_del").onclick = async () => { if (confirm("Delete this consideration?")) { if (await remove("gtm", g.id)) { closeModal(); toast("Deleted"); } } };
 }
 
@@ -1023,7 +1072,7 @@ function bind(root){
       case "edit-iface": ifaceForm(find("interfaces")); break;
       case "add-gtm": gtmForm(); break;
       case "edit-gtm": gtmForm(find("gtm")); break;
-      case "gtm-action": { const g=find("gtm"); actionForm({title:g.question, detail:g.guidance, owner:g.owner||"", status:"open", priority:"normal", workstream:"gtm", category:g.dept, subcategory:g.phase, source:{type:"gtm", gtmId:g.id, label:g.dept}}); break; }
+      case "gtm-action": { const g=find("gtm"); actionForm({title:g.question, detail:g.guidance, owner:g.owner||"", status:"open", priority:"normal", workstream:"gtm", category:g.dept, subcategory:TRACKS[trackOf(g)].label+", "+g.phase, source:{type:"gtm", gtmId:g.id, label:TRACKS[trackOf(g)].label+", "+g.dept}}); break; }
     }
   });
   root.querySelectorAll("[data-go-cat]").forEach(el => el.onclick = e => { e.preventDefault(); UI.af = {...UI.af, cat:el.dataset.goCat, ws:"", owner:"", q:"", status:"open"}; go("actions"); });
@@ -1034,7 +1083,8 @@ function bind(root){
   const q = root.querySelector("[data-af-q]");
   if (q) q.oninput = () => { UI.af.q = q.value; clearTimeout(bind._q); bind._q = setTimeout(() => { render(); const n=$("[data-af-q]"); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length);} }, 250); };
   root.querySelectorAll("[data-zoom]").forEach(el => el.onclick = () => { const lb=$("#lightbox"); lb.querySelector("img").src = el.dataset.zoom; lb.classList.add("open"); });
-  root.querySelectorAll("[data-dept]").forEach(el => el.onclick = () => { UI.dept = el.dataset.dept; render(); });
+  root.querySelectorAll("[data-dept]").forEach(el => el.onclick = () => { if (el.dataset.track) { UI.track = el.dataset.track; UI.scrollTo = "gtm-board"; } UI.dept = el.dataset.dept; render(); });
+  root.querySelectorAll("header[data-track]").forEach(el => { const f = () => { if (UI.track !== el.dataset.track) { UI.track = el.dataset.track; UI.dept = "__all"; } render(); }; el.onclick = f; el.onkeydown = e => { if (e.key==="Enter"||e.key===" ") { e.preventDefault(); f(); } }; });
   root.querySelectorAll("[data-gst]").forEach(el => el.onclick = () => write("gtm", el.dataset.id, {status:el.dataset.gst}, true));
   root.querySelectorAll("[data-gowner]").forEach(el => el.onchange = () => write("gtm", el.dataset.gowner, {owner:el.value.trim()}, true));
 }
