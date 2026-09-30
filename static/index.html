@@ -210,6 +210,7 @@ label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin
 .ws-sec .icard .docicon::after{border-color:var(--surface) var(--surface) rgba(255,255,255,.35) rgba(255,255,255,.35)}
 .sec-docs h4{margin:6px 0 0;font-size:.8rem;color:var(--muted);font-weight:600}
 .sec-docs .doc-row{padding:6px 0}
+.meet-sec{margin-top:30px;scroll-margin-top:calc(16px + env(safe-area-inset-top,0px))}
 /* gtm */
 .dept-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
 .dept-tab{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;cursor:pointer;text-align:left;min-width:150px}
@@ -300,7 +301,7 @@ const PHASES = ["Now","Alpha","Beta","Launch","Post-launch"];
 const DEPTS = ["Sales","Client Managers","Operations","Marketing","Technical Support","Launch governance"];
 const IFACE_STATUS = ["Concept","In design","In review","Approved","In build","Released"];
 const S = {docs:[],actions:[],meetings:[],interfaces:[],gtm:[],status:null,team:[],loaded:false};
-const UI = {view:"overview", af:{status:"open",owner:"",ws:"",cat:"",q:"",group:"owner"}, meeting:null, dept:"Sales"};
+const UI = {view:"status", scrollTo:null, af:{status:"open",owner:"",ws:"",cat:"",q:"",group:"owner"}, meeting:null, dept:"Sales"};
 let db=null, sample=null, assets=null, readOnly=false, dbState="loading";
 
 const $ = s => document.querySelector(s);
@@ -406,18 +407,18 @@ const isOver = a => a.due && a.status!=="done" && a.due < today();
 
 /* ---------- nav & routing ---------- */
 const VIEWS = [
-  ["overview","Where we stand"],
+  ["status","Status & meetings"],
   ["project","Project overview"],
   ["actions","Action items"],
-  ["meetings","Meetings"],
   ["gtm","Go-to-market"],
 ];
 function renderNav(){
-  const counts = {project:S.docs.length+S.interfaces.length, actions:openActions().length, meetings:S.meetings.length, interfaces:S.interfaces.length, gtm: S.gtm.filter(g=>g.status!=="done").length};
+  const counts = {project:S.docs.length+S.interfaces.length, actions:openActions().length, status:S.meetings.length, gtm: S.gtm.filter(g=>g.status!=="done").length};
   $("#nav").innerHTML = VIEWS.map(([k,l]) => `<a href="#${k}" ${UI.view===k?'aria-current="page"':""}><span>${l}</span>${counts[k]!=null?`<span class="count">${counts[k]}</span>`:""}</a>`).join("");
 }
-window.addEventListener("hashchange", () => { let v = location.hash.slice(1).split("/")[0]; if (v==="docs"||v==="interfaces") v="project"; if (VIEWS.some(x=>x[0]===v)) { UI.view=v; render(); $("#main").focus({preventScroll:true}); window.scrollTo(0,0);} });
-{ let v = location.hash.slice(1).split("/")[0]; if (v==="docs"||v==="interfaces") { v="project"; history.replaceState(null,"","#project"); } if (VIEWS.some(x=>x[0]===v)) UI.view=v; }
+const ALIAS = {docs:"project", interfaces:"project", overview:"status", meetings:"status"};
+window.addEventListener("hashchange", () => { let v = location.hash.slice(1).split("/")[0]; if (ALIAS[v]) { if (v==="meetings") UI.scrollTo="meetings-sec"; v=ALIAS[v]; history.replaceState(null,"","#"+v); } if (VIEWS.some(x=>x[0]===v)) { UI.view=v; const keep = !!UI.scrollTo; if (!keep) window.scrollTo(0,0); render(); $("#main").focus({preventScroll:true}); } });
+{ let v = location.hash.slice(1).split("/")[0]; if (ALIAS[v]) { if (v==="meetings") UI.scrollTo="meetings-sec"; v=ALIAS[v]; history.replaceState(null,"","#"+v); } if (VIEWS.some(x=>x[0]===v)) UI.view=v; }
 function go(view, patch){ Object.assign(UI, patch||{}); if (location.hash !== "#"+view) location.hash = view; else { UI.view=view; render(); } }
 
 function render(){
@@ -426,9 +427,10 @@ function render(){
   let banner = "";
   if (dbState==="offline") banner = `<div class="banner">The dashboard server could not be reached. Check your connection and reload the page.</div>`;
   if (dbState==="loading" && !S.loaded) { m.innerHTML = `<div class="empty"><span class="spinner"></span> Loading the program data</div>`; return; }
-  const fn = {overview:vOverview, project:vProject, actions:vActions, meetings:vMeetings, gtm:vGtm}[UI.view] || vOverview;
+  const fn = {status:vStatus, project:vProject, actions:vActions, gtm:vGtm}[UI.view] || vStatus;
   m.innerHTML = banner + fn();
   bind(m);
+  if (UI.scrollTo) { const t = document.getElementById(UI.scrollTo); UI.scrollTo = null; if (t) t.scrollIntoView({block:"start"}); }
 }
 
 /* ---------- overview ---------- */
@@ -445,7 +447,7 @@ function stationsFor(ws){
     return {c, reviewed, label: bits.join(", ") || "Not started"};
   });
 }
-function vOverview(){
+function vStatus(){
   const st = S.status;
   const oa = openActions(), over = oa.filter(isOver).length;
   const gtmDone = S.gtm.filter(g=>g.status==="done").length;
@@ -469,9 +471,10 @@ function vOverview(){
   const ownerRows = Object.entries(byOwner).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const maxO = Math.max(1,...ownerRows.map(r=>r[1]));
   const decisions = lastMeeting?.summary?.decisions || [];
-  return `
+  return `<div class="view-head"><div><h2>Status & meetings</h2><p>The big picture first, then the detail of every meeting. Import a transcript after each review and Claude adds its summary and action items here.</p></div>
+    <button class="btn primary" data-act="import-transcript">Import transcript</button></div>
   <section class="hero" aria-labelledby="hl">
-    <div class="eyeline"><span>Where we stand</span>${st?`<span>Updated ${esc(fmtDate(st.generatedAt))}</span>`:""}<span class="spacer"></span>
+    <div class="eyeline"><span>Status brief</span>${st?`<span>Updated ${esc(fmtDate(st.generatedAt))}</span>`:""}<span class="spacer"></span>
       <button class="btn ${st?"":"primary"} sm" data-act="gen-status" ${canAsk?"":"disabled title='AI is not set up on the server yet'"}>${st?"Refresh brief":"Generate status brief"}</button></div>
     <h1 id="hl">${headline}</h1>
     <p class="overall">${overall}</p>
@@ -487,9 +490,9 @@ function vOverview(){
   <div class="lists">
     ${st && (st.openQuestions||[]).length ? `<div class="panel"><h3>Open questions</h3><ul>${st.openQuestions.map(q=>`<li>${esc(clean(q))}</li>`).join("")}</ul></div>`:""}
     ${st && (st.risks||[]).length ? `<div class="panel"><h3>Risks to watch</h3><ul>${st.risks.map(q=>`<li>${esc(clean(q))}</li>`).join("")}</ul></div>`:""}
-    <div class="panel"><h3>Latest decisions</h3>${decisions.length ? `<ul>${decisions.slice(0,5).map(d=>`<li><b>${esc(clean(d.heading))}:</b> ${esc(clean(d.text))}</li>`).join("")}</ul><p class="small muted" style="margin:10px 0 0">From ${esc(lastMeeting.title)}. <a href="#meetings" data-open-meeting="${esc(lastMeeting.id)}">Read the summary</a></p>` : `<p class="muted small">Import a meeting transcript to see decisions here.</p>`}</div>
     <div class="panel"><h3>Open items by owner</h3>${ownerRows.length ? ownerRows.map(([n,c])=>`<div style="margin:8px 0"><div class="row" style="justify-content:space-between">${ownerHtml(n==="Unassigned"?"":n)}<b>${c}</b></div><div class="bar" style="margin-top:4px"><i style="width:${c/maxO*100}%;background:var(--ws-a)"></i></div></div>`).join("") : `<p class="muted small">No open action items.</p>`}</div>
-  </div>`;
+  </div>
+  ${meetingsBlock()}`;
 }
 async function genStatus(btn){
   if (!sample) return;
@@ -561,7 +564,7 @@ function sectionCard(ws, c){
       <div class="row"><h3>${esc(c)}</h3><span class="spacer"></span>${main ? ifaceStatusChip(main) : `<span class="chip">Not started</span>`}</div>
       ${main?.description?`<p>${esc(main.description)}</p>`:""}
       ${ifs.length ? `<div class="row small">${ifs.map(i=>`${i.artifactUrl?`<a class="btn sm primary" href="${esc(i.artifactUrl)}" target="_blank" rel="noopener">Open ${ifs.length>1?esc(i.name):"artifact"}</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(i.id)}">Edit${ifs.length>1?" "+esc(i.name):" interface"}</button>`).join("")}</div>` : ""}
-      <div class="row small">${open?`<a href="#actions" data-go-cat="${esc(c)}">${open} open action${open===1?"":"s"}</a>`:`<span class="muted">No open actions</span>`}${meets.length?`<a href="#meetings" data-open-meeting="${esc(meets[0].id)}">${meets.length} meeting${meets.length===1?"":"s"}</a>`:""}</div>
+      <div class="row small">${open?`<a href="#actions" data-go-cat="${esc(c)}">${open} open action${open===1?"":"s"}</a>`:`<span class="muted">No open actions</span>`}${meets.length?`<a href="#status" data-open-meeting="${esc(meets[0].id)}">${meets.length} meeting${meets.length===1?"":"s"}</a>`:""}</div>
       <div class="sec-docs">${docs.length ? Object.keys(bySub).sort().map(sub => `${sub?`<h4>${esc(sub)}</h4>`:""}${bySub[sub].map(d=>`<div class="doc-row"><span class="docicon small"></span><div class="t">${docRow(d)}</div></div>`).join("")}`).join("") : `<p class="small muted" style="margin:0">No documents yet.</p>`}</div>
       <div class="row" style="margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">
         <button class="btn sm" data-act="add-doc-in" data-ws="${ws}" data-cat="${esc(c)}">Add document</button>
@@ -749,11 +752,11 @@ function vActions(){
   <div class="alist">${list.length ? Object.entries(groups).map(([g,items]) => `${f.group!=="none"?`<div class="group-h"><span>${esc(g)}</span><span class="muted">${items.length}</span></div>`:""}${items.map(actionRow).join("")}`).join("") : `<div class="empty">${S.actions.length?"No items match these filters.":"No action items yet. Import comments or a meeting transcript, or add one yourself."}</div>`}</div>`;
 }
 function actionRow(a){
-  const src = a.source?.type==="meeting" ? `<a href="#meetings" data-open-meeting="${esc(a.source.meetingId)}" class="small">${esc(a.source.label||"Meeting")}</a>` : a.source?.type==="doc" ? `<span class="small muted">Comment on ${esc(a.source.label||"document")}</span>` : a.source?.type==="gtm" ? `<span class="small muted">Go-to-market, ${esc(a.source.label||"")}</span>` : "";
+  const src = a.source?.type==="meeting" ? `<a href="#status" data-open-meeting="${esc(a.source.meetingId)}" class="small">${esc(a.source.label||"Meeting")}</a>` : a.source?.type==="doc" ? `<span class="small muted">Comment on ${esc(a.source.label||"document")}</span>` : a.source?.type==="gtm" ? `<span class="small muted">Go-to-market, ${esc(a.source.label||"")}</span>` : "";
   return `<div class="aitem ${a.status==="done"?"done":""}">
     <button class="check ${a.status==="done"?"on":""}" data-act="toggle" data-id="${esc(a.id)}" aria-label="${a.status==="done"?"Mark as open":"Mark as complete"}"></button>
     <div><div class="atitle">${esc(a.title)}</div>${a.detail?`<div class="adetail">${esc(a.detail)}</div>`:""}
-      <div class="ameta">${ownerHtml(a.owner)}${a.due?`<span class="due small ${isOver(a)?"over":""}">${isOver(a)?"Overdue, ":"Due "}${esc(fmtDate(a.due))}</span>`:""}${a.priority==="high"?`<span class="chip bad">High priority</span>`:""}${wsChip(a.workstream)}${a.category?`<span class="chip">${esc(a.category)}${a.subcategory?", "+esc(a.subcategory):""}</span>`:""}${src}${a._updatedBy?`<span class="small muted">Updated by ${esc(a._updatedBy)}</span>`:""}</div></div>
+      <div class="ameta">${ownerHtml(a.owner)}${a.due?`<span class="due small ${isOver(a)?"over":""}">${isOver(a)?"Overdue, ":"Due "}${esc(fmtDate(a.due))}</span>`:""}${a.priority==="high"?`<span class="chip bad">High priority</span>`:""}${wsChip(a.workstream)}${a.category?`<span class="chip">${esc(a.category)}${a.subcategory?", "+esc(a.subcategory):""}</span>`:""}${src}${a._updatedBy && !["Initial data","Update"].includes(a._updatedBy)?`<span class="small muted">Updated by ${esc(a._updatedBy)}</span>`:""}</div></div>
     <div class="aside"><button class="btn sm ghost" data-act="edit-action" data-id="${esc(a.id)}">Edit</button></div>
   </div>`;
 }
@@ -800,20 +803,20 @@ function summaryHtml(s){
     ${(s.decisions||[]).length?`<h3>Decisions made</h3><ul>${s.decisions.map(d=>`<li><b>${esc(clean(d.heading))}:</b> ${esc(clean(d.text))}${pts(d.points)}</li>`).join("")}</ul>`:""}
     ${(s.requirements||[]).length?`<h3>Requirements</h3><ul>${s.requirements.map(d=>`<li><b>${esc(clean(d.heading))}:</b> ${esc(clean(d.text))}</li>`).join("")}</ul>`:""}`;
 }
-function vMeetings(){
+function meetingsBlock(){
   const cur = S.meetings.find(m=>m.id===UI.meeting) || S.meetings[0];
   const acts = cur ? S.actions.filter(a => a.source?.meetingId===cur.id) : [];
-  return `<div class="view-head"><div><h2>Meetings</h2><p>Import a transcript and Claude writes the summary in the team format: key outcomes, decisions made, requirements and action items.</p></div>
-    <button class="btn primary" data-act="import-transcript">Import transcript</button></div>
+  return `<section id="meetings-sec" class="meet-sec" aria-labelledby="mh">
+  <div class="row" style="margin-bottom:12px"><h2 id="mh">Meeting summaries</h2><span class="muted small">${S.meetings.length} logged</span><span class="spacer"></span><button class="btn sm" data-act="import-transcript">Import transcript</button></div>
   ${S.meetings.length ? `<div class="meet-layout">
     <div class="meet-list">${S.meetings.map(m=>`<button class="meet-card" data-meeting="${esc(m.id)}" aria-current="${cur&&m.id===cur.id}"><b>${esc(m.title)}</b><span class="muted small">${m.date?esc(fmtDate(m.date)):"No date"}</span><div class="row" style="margin-top:6px">${wsChip(m.workstream)}${m.category?`<span class="chip">${esc(m.category)}</span>`:""}</div></button>`).join("")}</div>
     <article class="summary">
       <div class="row"><h2 style="font-size:1.4rem">${esc(cur.title)}</h2><span class="spacer"></span><button class="btn sm" data-act="copy-summary" data-id="${esc(cur.id)}">Copy summary</button><button class="btn sm ghost" data-act="edit-meeting" data-id="${esc(cur.id)}">Edit</button></div>
-      <div class="row small muted" style="margin-top:6px">${cur.date?esc(fmtDate(cur.date)):"No date set"}${cur.category?`<span>, ${esc(cur.category)}${cur.subcategory?" / "+esc(cur.subcategory):""}</span>`:""}${(cur.summary?.attendees||[]).length?`<span>, with ${esc(cur.summary.attendees.join(", "))}</span>`:""}</div>
+      <div class="small muted" style="margin-top:6px">${esc([cur.date?fmtDate(cur.date):"No date set", cur.category?(cur.category+(cur.subcategory?" / "+cur.subcategory:"")):"", (cur.summary?.attendees||[]).length?"with "+cur.summary.attendees.join(", "):""].filter(Boolean).join(", "))}</div>
       ${summaryHtml(cur.summary)}
       <h3>Action items</h3>
       ${acts.length ? `<div class="alist">${acts.map(actionRow).join("")}</div>` : `<p class="muted">No action items came out of this meeting.</p>`}
-    </article></div>` : `<div class="panel empty">No meetings yet. Import your first transcript to get a summary and action items.</div>`}`;
+    </article></div>` : `<div class="panel empty">No meetings yet. Import your first transcript to get a summary and action items.</div>`}</section>`;
 }
 function condenseTranscript(raw){
   const out = []; let last = null;
@@ -899,7 +902,7 @@ function previewMeeting(meta, r){
       const it = items[i];
       await write("actions", uid("act"), {title:clean(it.task), detail:clean(it.context||""), owner:document.querySelector(`[data-owner="${i}"]`).value.trim(), due:it.due||"", status:"open", priority:"normal", workstream:meta.workstream, category:meta.category, subcategory:meta.subcategory, source:{type:"meeting", meetingId:id, label:meta.title}, createdAt:new Date().toISOString()});
     }
-    UI.meeting = id; closeModal(); toast("Meeting saved"); go("meetings");
+    UI.meeting = id; UI.scrollTo = "meetings-sec"; closeModal(); toast("Meeting saved"); go("status");
   };
 }
 function meetingForm(m){
@@ -1025,7 +1028,7 @@ function bind(root){
     }
   });
   root.querySelectorAll("[data-go-cat]").forEach(el => el.onclick = e => { e.preventDefault(); UI.af = {...UI.af, cat:el.dataset.goCat, ws:"", owner:"", q:"", status:"open"}; go("actions"); });
-  root.querySelectorAll("[data-open-meeting]").forEach(el => el.onclick = e => { e.preventDefault(); UI.meeting = el.dataset.openMeeting; go("meetings"); });
+  root.querySelectorAll("[data-open-meeting]").forEach(el => el.onclick = e => { e.preventDefault(); UI.meeting = el.dataset.openMeeting; UI.scrollTo = "meetings-sec"; go("status"); });
   root.querySelectorAll("[data-meeting]").forEach(el => el.onclick = () => { UI.meeting = el.dataset.meeting; render(); });
   root.querySelectorAll("[data-af]").forEach(el => el.onclick = () => { UI.af[el.dataset.af] = el.dataset.v; render(); });
   root.querySelectorAll("[data-af-sel]").forEach(el => el.onchange = () => { UI.af[el.dataset.afSel] = el.value; render(); });
