@@ -553,11 +553,69 @@ def _m_ops_groups(payload):
     put_record("settings", "structure", st, "Update")
 
 
+def _m_ops_groups_v2(payload):
+    """Rebuild the Ops backend groups from the data itself and rename them.
+
+    Every backend interface becomes its own card: operator interfaces in
+    'Meeting Services Specific', interpreter interfaces in 'Language Services Specific',
+    everything else in 'Shared by MS & LS'. Nothing is deleted; items filed under an old
+    group name move to the renamed group.
+    """
+    MS, LS, SH = "Meeting Services Specific", "Language Services Specific", "Shared by MS & LS"
+    rename = {"Meeting Services": MS, "Language Services": LS}
+    legacy = {"LS & MS Dashboard", "MS & LS Dashboard"}
+    st = get_record("settings", "structure") or {}
+    prev = {}
+    for g in ((st.get("groups") or {}).get("backend") or []):
+        for x in g.get("sections") or []:
+            prev[x] = rename.get(g.get("name"), g.get("name"))
+    ms, ls, sh = [], [], []
+    home = None
+    for rid, data in q("SELECT id,data FROM records WHERE deleted=0 AND collection='interfaces'", fetch=True):
+        rec = json.loads(data)
+        if rec.get("workstream") != "backend":
+            continue
+        name = (rec.get("name") or rid).strip()
+        cat = rec.get("category") or ""
+        low = (name + " " + cat).lower()
+        if "operator" in low or cat == "Meeting Services":
+            ms.append(name)
+        elif "interpreter" in low or cat == "Language Services":
+            ls.append(name)
+        elif prev.get(name) in (MS, LS):
+            (ms if prev.get(name) == MS else ls).append(name)
+        else:
+            sh.append(name)
+            if "home" in low or cat in legacy:
+                home = home or name
+        if cat != name:
+            rec["category"] = name
+            put_record("interfaces", rid, rec, "Update")
+    target = home or (sh[0] if sh else "LS & MS Dashboard: Home")
+    if target not in sh:
+        sh.append(target)
+    for col, rid, data in q("SELECT collection,id,data FROM records WHERE deleted=0 AND collection IN ('docs','actions','meetings')", fetch=True):
+        rec = json.loads(data)
+        cat = rec.get("category")
+        new = rename.get(cat) or (target if cat in legacy else None)
+        if new:
+            rec["category"] = new
+            put_record(col, rid, rec, "Update")
+    secs = st.get("sections") or {}
+    used = set(ms) | set(ls) | set(sh) | legacy | set(rename) | {MS, LS, SH}
+    secs["backend"] = [x for x in (secs.get("backend") or []) if x not in used]
+    secs.setdefault("interfaces", ["Interpreter Interface", "Operator Interface", "Participant Interface", "Viewer Interface", "Producer Interface"])
+    st["sections"] = secs
+    st["groups"] = {"backend": [{"name": MS, "sections": ms}, {"name": LS, "sections": ls}, {"name": SH, "sections": sh}]}
+    put_record("settings", "structure", st, "Update")
+
+
 MIGRATIONS = [
     ("2026-09-interface-sections", _m_interface_sections),
     ("2026-09-gtm-tracks", _m_gtm_tracks),
     ("2026-10-ms-ls-split", _m_ms_ls_split),
     ("2026-10-ops-groups", _m_ops_groups),
+    ("2026-10-ops-groups-v2", _m_ops_groups_v2),
 ]
 
 
@@ -574,8 +632,20 @@ def run_migrations(payload):
         put_record("settings", "migrations", log, "Update")
 
 
+def _startup():
+    """Seed and migrate once, even when several workers boot at the same time."""
+    if IS_PG:
+        q("SELECT pg_advisory_lock(424242)")
+        try:
+            seed_missing()
+        finally:
+            q("SELECT pg_advisory_unlock(424242)")
+    else:
+        seed_missing()
+
+
 try:
-    seed_missing()
+    _startup()
 except Exception as exc:  # never block startup on seeding
     app.logger.warning("Seeding skipped: %s", exc)
 
