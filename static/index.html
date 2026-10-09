@@ -208,6 +208,15 @@ label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin
 .masters .docicon::after{border-color:var(--surface) var(--surface) rgba(255,255,255,.35) rgba(255,255,255,.35)}
 .icard .docicon{background:var(--c)}
 .ws-sec .icard .docicon::after{border-color:var(--surface) var(--surface) rgba(255,255,255,.35) rgba(255,255,255,.35)}
+.group-block{border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;margin:0 0 18px;background:color-mix(in srgb, var(--c) 5%, transparent)}
+.group-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-bottom:12px}
+.group-head h3{font-size:1.1rem}
+.itiles{display:flex;flex-direction:column;gap:10px}
+.itile{display:grid;grid-template-columns:116px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:8px}
+.itile .shot{aspect-ratio:16/10;border:1px solid var(--line);border-radius:6px}
+.itile .shot.none{font-size:.74rem}
+.itile-b{display:flex;flex-direction:column;gap:4px;min-width:0}
+.itile-b b{font-size:.88rem;color:var(--ink)}
 .sec-docs h4{margin:6px 0 0;font-size:.8rem;color:var(--muted);font-weight:600}
 .sec-docs .doc-row{padding:6px 0}
 .meet-sec{margin-top:30px;scroll-margin-top:calc(16px + env(safe-area-inset-top,0px))}
@@ -376,6 +385,7 @@ function rebuild(){
   S.status = RAW.status.current || null;
   S.team = RAW.settings.team?.names || [];
   S.structure = RAW.settings.structure?.sections || {};
+  S.groups = RAW.settings.structure?.groups || null;
   S.loaded = true;
 }
 let pendingRender = false;
@@ -413,7 +423,10 @@ function people(){
   S.gtm.forEach(g => g.owner && set.add(g.owner));
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
-const DEFAULT_SECTIONS = {interfaces:["Interpreter Interface","Operator Interface","Participant Interface","Viewer Interface","Producer Interface"], backend:["LS & MS Dashboard"]};
+const DEFAULT_SECTIONS = {interfaces:["Interpreter Interface","Operator Interface","Participant Interface","Viewer Interface","Producer Interface"], backend:["MS & LS Dashboard","Meeting Services","Language Services"]};
+const DEFAULT_GROUPS = {backend:[{name:"MS & LS Dashboard", sections:["Meeting Services","Language Services"]}]};
+const groupsFor = ws => (S.groups ? S.groups[ws] : DEFAULT_GROUPS[ws]) || [];
+const groupOf = (ws, c) => groupsFor(ws).find(g => g.name === c || (g.sections||[]).includes(c));
 function sections(ws){
   const base = (S.structure && S.structure[ws]) || DEFAULT_SECTIONS[ws] || [];
   const extra = new Set();
@@ -563,7 +576,7 @@ function handleSampleErr(e){
 function ifaceStatusChip(i){ const si = IFACE_STATUS.indexOf(i.status); return `<span class="chip ${si>=3?"ok":si>=1?"warn":""}">${esc(i.status||"Concept")}</span>`; }
 function vProject(){
   const wss = ["interfaces","backend"].concat(S.docs.some(d=>d.workstream==="gtm") ? ["gtm"] : []);
-  return `<div class="view-head"><div><h2>Project overview</h2><p>Every part of the revamp in one place: the master documents, then each section with its current interface artifact, its documents and its open action items.</p></div>
+  return `<div class="view-head"><div><h2>Project overview</h2><p>Every part of the revamp in one place: the master documents, then each section with its interface artifacts, its documents and its open action items.</p></div>
     <div class="row"><button class="btn" data-act="add-doc">Add document</button><button class="btn primary" data-act="add-iface">Add interface</button></div></div>
   ${wss.map(ws => {
     const docs = S.docs.filter(d => d.workstream===ws);
@@ -572,32 +585,54 @@ function vProject(){
     const loose = docs.filter(d => d.kind!=="Master document" && !d.category);
     if (loose.length && !secs.includes("General")) secs.push("General");
     const reviewed = secs.filter(c => S.meetings.some(m=>m.workstream===ws && m.category===c)).length;
+    // build blocks: plain sections share one gallery, each group gets its own framed block
+    const blocks = []; const seen = new Set(); let plain = [];
+    const flush = () => { if (plain.length) { blocks.push(`<div class="gallery">${plain.join("")}</div>`); plain = []; } };
+    secs.forEach(c => {
+      const g = ws==="gtm" ? null : groupOf(ws, c);
+      if (!g) { plain.push(sectionCard(ws, c)); return; }
+      if (seen.has(g.name)) return; seen.add(g.name); flush();
+      const members = [g.name, ...(g.sections||[])].filter(x => secs.includes(x));
+      blocks.push(`<div class="group-block"><div class="group-head"><h3>${esc(g.name)}</h3><span class="muted small">${(g.sections||[]).map(esc).join(" and ")}${g.sections?.length?", with the views both teams share":""}</span></div>
+        <div class="gallery">${members.map(x => sectionCard(ws, x, x===g.name ? "Shared by both teams" : null)).join("")}</div></div>`);
+    });
+    flush();
     return `<section class="ws-sec ${ws}">
       <header class="ws-head"><div><h2>${WS[ws].label}</h2><span class="muted small">${secs.length} section${secs.length===1?"":"s"}, ${reviewed} reviewed in a meeting, ${docs.length} document${docs.length===1?"":"s"}</span></div>
         ${ws!=="gtm"?`<button class="btn sm ghost" data-act="add-section" data-ws="${ws}">Add section</button>`:""}</header>
       ${masters.length ? `<div class="masters">${masters.map(d=>`<div class="master"><span class="docicon"></span><div class="t" style="flex:1;min-width:0"><div class="small muted">Master document</div>${docRow(d,true)}</div></div>`).join("")}</div>` : ""}
-      <div class="gallery">${secs.map(c => sectionCard(ws, c)).join("")}</div>
+      ${blocks.join("")}
     </section>`;
   }).join("")}`;
 }
-function sectionCard(ws, c){
+function ifaceTile(i){
+  return `<div class="itile">
+    ${i.imageUrl ? `<button class="shot" data-zoom="${esc(i.imageUrl)}" aria-label="Enlarge ${esc(i.name)} preview"><img src="${esc(i.imageUrl)}" alt="${esc(i.name)} preview" loading="lazy"></button>` : `<div class="shot none">No preview</div>`}
+    <div class="itile-b"><div class="row" style="gap:6px"><b>${esc(i.name)}</b>${ifaceStatusChip(i)}</div>
+      ${i.description?`<div class="small muted">${esc(i.description)}</div>`:""}
+      <div class="row" style="gap:4px">${i.artifactUrl?`<a class="btn sm primary" href="${esc(i.artifactUrl)}" target="_blank" rel="noopener">Open</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(i.id)}">Edit</button></div></div>
+  </div>`;
+}
+function sectionCard(ws, c, title){
   const ifs = S.interfaces.filter(i => i.workstream===ws && (i.category||"General")===c);
-  const main = ifs.find(i=>i.imageUrl) || ifs[0];
+  const one = ifs.length === 1 ? ifs[0] : null;
   const docs = S.docs.filter(d => d.workstream===ws && d.kind!=="Master document" && (d.category||"General")===c);
   const bySub = {}; docs.forEach(d => (bySub[d.subcategory||""] ||= []).push(d));
-  const open = S.actions.filter(a => a.category===c && a.status!=="done").length;
+  const open = S.actions.filter(a => a.category===c && (!a.workstream || a.workstream===ws) && a.status!=="done").length;
   const meets = S.meetings.filter(m => m.workstream===ws && m.category===c);
+  const head = one ? (one.imageUrl ? `<button class="shot" data-zoom="${esc(one.imageUrl)}" aria-label="Enlarge ${esc(one.name)} preview"><img src="${esc(one.imageUrl)}" alt="${esc(one.name)} preview" loading="lazy"></button>` : `<div class="shot none">No interface preview yet</div>`)
+    : ifs.length ? "" : `<div class="shot none">No interface preview yet</div>`;
   return `<article class="icard">
-    ${main?.imageUrl ? `<button class="shot" data-zoom="${esc(main.imageUrl)}" aria-label="Enlarge ${esc(main.name)} preview"><img src="${esc(main.imageUrl)}" alt="${esc(main.name)} preview" loading="lazy"></button>` : `<div class="shot none">No interface preview yet</div>`}
+    ${head}
     <div class="body">
-      <div class="row"><h3>${esc(c)}</h3><span class="spacer"></span>${main ? ifaceStatusChip(main) : `<span class="chip">Not started</span>`}</div>
-      ${main?.description?`<p>${esc(main.description)}</p>`:""}
-      ${ifs.length ? `<div class="row small">${ifs.map(i=>`${i.artifactUrl?`<a class="btn sm primary" href="${esc(i.artifactUrl)}" target="_blank" rel="noopener">Open ${ifs.length>1?esc(i.name):"artifact"}</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(i.id)}">Edit${ifs.length>1?" "+esc(i.name):" interface"}</button>`).join("")}</div>` : ""}
+      <div class="row"><h3>${esc(title || c)}</h3><span class="spacer"></span>${one ? ifaceStatusChip(one) : ifs.length ? `<span class="chip">${ifs.length} interfaces</span>` : `<span class="chip">Not started</span>`}</div>
+      ${one ? `${one.name && one.name!==(title||c) ? `<div style="font-weight:650;color:var(--ink)">${esc(one.name)}</div>` : ""}${one.description?`<p>${esc(one.description)}</p>`:""}<div class="row small">${one.artifactUrl?`<a class="btn sm primary" href="${esc(one.artifactUrl)}" target="_blank" rel="noopener">Open ${esc(one.name)}</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(one.id)}">Edit interface</button></div>` : ""}
+      ${ifs.length > 1 ? `<div class="itiles">${ifs.map(ifaceTile).join("")}</div>` : ""}
       <div class="row small">${open?`<a href="#actions" data-go-cat="${esc(c)}">${open} open action${open===1?"":"s"}</a>`:`<span class="muted">No open actions</span>`}${meets.length?`<a href="#status" data-open-meeting="${esc(meets[0].id)}">${meets.length} meeting${meets.length===1?"":"s"}</a>`:""}</div>
       <div class="sec-docs">${docs.length ? Object.keys(bySub).sort().map(sub => `${sub?`<h4>${esc(sub)}</h4>`:""}${bySub[sub].map(d=>`<div class="doc-row"><span class="docicon small"></span><div class="t">${docRow(d)}</div></div>`).join("")}`).join("") : `<p class="small muted" style="margin:0">No documents yet.</p>`}</div>
       <div class="row" style="margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">
         <button class="btn sm" data-act="add-doc-in" data-ws="${ws}" data-cat="${esc(c)}">Add document</button>
-        ${!ifs.length ? `<button class="btn sm" data-act="add-iface-in" data-ws="${ws}" data-cat="${esc(c)}">Add interface</button>` : ""}
+        <button class="btn sm" data-act="add-iface-in" data-ws="${ws}" data-cat="${esc(c)}">Add interface</button>
       </div>
     </div></article>`;
 }
@@ -1059,7 +1094,7 @@ function addSection(ws){
     const all = {...DEFAULT_SECTIONS, ...(S.structure||{})};
     if ((all[ws]||[]).includes(n)) return toast("That section already exists.");
     all[ws] = [...(all[ws]||[]), n];
-    if (await write("settings", "structure", {sections: all})) { closeModal(); toast("Section added"); }
+    if (await write("settings", "structure", {sections: all, ...(S.groups ? {groups: S.groups} : {})})) { closeModal(); toast("Section added"); }
   };
 }
 /* ---------- modal ---------- */
@@ -1092,7 +1127,7 @@ function bind(root){
       case "copy-summary": { const t = summaryText(find("meetings")); (navigator.clipboard?.writeText(t) || Promise.reject()).then(()=>toast("Summary copied"), ()=>{ openModal("Copy summary", `<textarea rows="16" id="cpy">${esc(t)}</textarea>`, `<button class="btn" data-close>Close</button>`); $("#cpy").select(); }); break; }
       case "add-iface": ifaceForm(); break;
       case "add-doc-in": docForm({workstream:el.dataset.ws, category:el.dataset.cat, kind:"Review document"}); break;
-      case "add-iface-in": ifaceForm({workstream:el.dataset.ws, category:el.dataset.cat, status:"Concept", name:el.dataset.cat}); break;
+      case "add-iface-in": ifaceForm({workstream:el.dataset.ws, category:el.dataset.cat, status:"Concept", name:""}); break;
       case "add-section": addSection(el.dataset.ws); break;
       case "edit-iface": ifaceForm(find("interfaces")); break;
       case "add-gtm": gtmForm(); break;

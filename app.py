@@ -470,9 +470,40 @@ def _m_gtm_tracks(payload):
         put_record("gtm", rid, rec, "Update")
 
 
+def _m_ms_ls_split(payload):
+    """Split the 'LS & MS Dashboard' section into Meeting Services and Language Services.
+
+    Interfaces about operators go to Meeting Services, about interpreters to Language Services;
+    everything else under the old name moves to the shared 'MS & LS Dashboard' group card.
+    """
+    old, group = "LS & MS Dashboard", "MS & LS Dashboard"
+    rows = q("SELECT collection,id,data FROM records WHERE deleted=0 AND collection IN ('docs','actions','meetings','interfaces')", fetch=True)
+    for col, rid, data in rows:
+        rec = json.loads(data)
+        if rec.get("category") != old:
+            continue
+        name = (rec.get("name") or rec.get("title") or "").lower() if col == "interfaces" else ""
+        if "operator" in name:
+            rec["category"] = "Meeting Services"
+        elif "interpreter" in name:
+            rec["category"] = "Language Services"
+        else:
+            rec["category"] = group
+        put_record(col, rid, rec, "Update")
+    st = get_record("settings", "structure") or {}
+    secs = st.get("sections") or {}
+    backend = [x for x in (secs.get("backend") or []) if x not in (old, group, "Meeting Services", "Language Services")]
+    secs["backend"] = [group, "Meeting Services", "Language Services"] + backend
+    secs.setdefault("interfaces", ["Interpreter Interface", "Operator Interface", "Participant Interface", "Viewer Interface", "Producer Interface"])
+    st["sections"] = secs
+    st["groups"] = {"backend": [{"name": group, "sections": ["Meeting Services", "Language Services"]}]}
+    put_record("settings", "structure", st, "Update")
+
+
 MIGRATIONS = [
     ("2026-09-interface-sections", _m_interface_sections),
     ("2026-09-gtm-tracks", _m_gtm_tracks),
+    ("2026-10-ms-ls-split", _m_ms_ls_split),
 ]
 
 
