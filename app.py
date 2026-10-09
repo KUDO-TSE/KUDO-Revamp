@@ -500,10 +500,64 @@ def _m_ms_ls_split(payload):
     put_record("settings", "structure", st, "Update")
 
 
+def _m_ops_groups(payload):
+    """Ops backend = master project with a Meeting Services group and a Language Services group.
+
+    Each backend interface becomes its own card (its category is its name) inside a group:
+    operator interfaces go to Meeting Services, interpreter interfaces to Language Services,
+    the rest (the shared Home dashboard) to 'Shared by MS & LS'.
+    """
+    legacy = {"LS & MS Dashboard", "MS & LS Dashboard"}
+    ms, ls, shared = [], [], []
+    home = None
+    rows = q("SELECT id,data FROM records WHERE deleted=0 AND collection='interfaces'", fetch=True)
+    for rid, data in rows:
+        rec = json.loads(data)
+        if rec.get("workstream") != "backend":
+            continue
+        cat, name = rec.get("category") or "", rec.get("name") or rid
+        low = name.lower()
+        if cat == "Meeting Services" or "operator" in low:
+            ms.append(name)
+        elif cat == "Language Services" or "interpreter" in low:
+            ls.append(name)
+        elif cat in legacy or not cat:
+            shared.append(name)
+            home = home or name
+        else:
+            continue
+        if cat != name:
+            rec["category"] = name
+            put_record("interfaces", rid, rec, "Update")
+    # documents, actions and meetings filed under the old dashboard name follow the Home dashboard
+    target = home or "LS & MS Dashboard: Home"
+    if not home:
+        shared.append(target)
+    rows = q("SELECT collection,id,data FROM records WHERE deleted=0 AND collection IN ('docs','actions','meetings')", fetch=True)
+    for col, rid, data in rows:
+        rec = json.loads(data)
+        if rec.get("category") in legacy:
+            rec["category"] = target
+            put_record(col, rid, rec, "Update")
+    st = get_record("settings", "structure") or {}
+    secs = st.get("sections") or {}
+    drop = legacy | {"Meeting Services", "Language Services"} | set(ms) | set(ls) | set(shared)
+    secs["backend"] = [x for x in (secs.get("backend") or []) if x not in drop]
+    secs.setdefault("interfaces", ["Interpreter Interface", "Operator Interface", "Participant Interface", "Viewer Interface", "Producer Interface"])
+    st["sections"] = secs
+    st["groups"] = {"backend": [
+        {"name": "Meeting Services", "sections": ms},
+        {"name": "Language Services", "sections": ls},
+        {"name": "Shared by MS & LS", "sections": shared},
+    ]}
+    put_record("settings", "structure", st, "Update")
+
+
 MIGRATIONS = [
     ("2026-09-interface-sections", _m_interface_sections),
     ("2026-09-gtm-tracks", _m_gtm_tracks),
     ("2026-10-ms-ls-split", _m_ms_ls_split),
+    ("2026-10-ops-groups", _m_ops_groups),
 ]
 
 

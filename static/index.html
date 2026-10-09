@@ -209,7 +209,7 @@ label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin
 .icard .docicon{background:var(--c)}
 .ws-sec .icard .docicon::after{border-color:var(--surface) var(--surface) rgba(255,255,255,.35) rgba(255,255,255,.35)}
 .group-block{border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;margin:0 0 18px;background:color-mix(in srgb, var(--c) 5%, transparent)}
-.group-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-bottom:12px}
+.group-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin-bottom:12px}
 .group-head h3{font-size:1.1rem}
 .itiles{display:flex;flex-direction:column;gap:10px}
 .itile{display:grid;grid-template-columns:116px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:8px}
@@ -423,12 +423,13 @@ function people(){
   S.gtm.forEach(g => g.owner && set.add(g.owner));
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
-const DEFAULT_SECTIONS = {interfaces:["Interpreter Interface","Operator Interface","Participant Interface","Viewer Interface","Producer Interface"], backend:["MS & LS Dashboard","Meeting Services","Language Services"]};
-const DEFAULT_GROUPS = {backend:[{name:"MS & LS Dashboard", sections:["Meeting Services","Language Services"]}]};
+const DEFAULT_SECTIONS = {interfaces:["Interpreter Interface","Operator Interface","Participant Interface","Viewer Interface","Producer Interface"], backend:["LS & MS Dashboard: Home"]};
+const DEFAULT_GROUPS = {backend:[{name:"Meeting Services", sections:[]},{name:"Language Services", sections:[]},{name:"Shared by MS & LS", sections:["LS & MS Dashboard: Home"]}]};
 const groupsFor = ws => (S.groups ? S.groups[ws] : DEFAULT_GROUPS[ws]) || [];
 const groupOf = (ws, c) => groupsFor(ws).find(g => g.name === c || (g.sections||[]).includes(c));
 function sections(ws){
-  const base = (S.structure && S.structure[ws]) || DEFAULT_SECTIONS[ws] || [];
+  const base0 = (S.structure && S.structure[ws]) || DEFAULT_SECTIONS[ws] || [];
+  const base = [...base0]; groupsFor(ws).forEach(g => (g.sections||[]).forEach(x => { if (!base.includes(x)) base.push(x); }));
   const extra = new Set();
   [...S.docs, ...S.meetings, ...S.actions, ...S.interfaces].forEach(x => { if (x.workstream===ws && x.category && !base.includes(x.category)) extra.add(x.category); });
   return [...base, ...[...extra].sort()];
@@ -585,17 +586,17 @@ function vProject(){
     const loose = docs.filter(d => d.kind!=="Master document" && !d.category);
     if (loose.length && !secs.includes("General")) secs.push("General");
     const reviewed = secs.filter(c => S.meetings.some(m=>m.workstream===ws && m.category===c)).length;
-    // build blocks: plain sections share one gallery, each group gets its own framed block
-    const blocks = []; const seen = new Set(); let plain = [];
-    const flush = () => { if (plain.length) { blocks.push(`<div class="gallery">${plain.join("")}</div>`); plain = []; } };
-    secs.forEach(c => {
-      const g = ws==="gtm" ? null : groupOf(ws, c);
-      if (!g) { plain.push(sectionCard(ws, c)); return; }
-      if (seen.has(g.name)) return; seen.add(g.name); flush();
-      const members = [g.name, ...(g.sections||[])].filter(x => secs.includes(x));
-      blocks.push(`<div class="group-block"><div class="group-head"><h3>${esc(g.name)}</h3><span class="muted small">${(g.sections||[]).map(esc).join(" and ")}${g.sections?.length?", with the views both teams share":""}</span></div>
-        <div class="gallery">${members.map(x => sectionCard(ws, x, x===g.name ? "Shared by both teams" : null)).join("")}</div></div>`);
+    // groups first (each its own framed block), then any section outside a group
+    const blocks = []; const grouped = new Set();
+    if (ws !== "gtm") groupsFor(ws).forEach(g => {
+      const members = [...(g.sections||[])];
+      if (secs.includes(g.name)) members.push(g.name);
+      members.forEach(x => grouped.add(x)); grouped.add(g.name);
+      blocks.push(`<div class="group-block"><div class="group-head"><h3>${esc(g.name)}</h3><span class="muted small">${(g.sections||[]).length} interface${(g.sections||[]).length===1?"":"s"}</span><span class="spacer"></span><button class="btn sm" data-act="add-iface-group" data-ws="${ws}" data-group="${esc(g.name)}">Add interface</button></div>
+        ${members.length ? `<div class="gallery">${members.map(x => sectionCard(ws, x, x===g.name ? "General" : null)).join("")}</div>` : `<p class="small muted" style="margin:0">No interfaces in this group yet.</p>`}</div>`);
     });
+    const rest = secs.filter(c => !grouped.has(c));
+    const flush = () => { if (rest.length) blocks.push(`<div class="gallery">${rest.map(c => sectionCard(ws, c)).join("")}</div>`); };
     flush();
     return `<section class="ws-sec ${ws}">
       <header class="ws-head"><div><h2>${WS[ws].label}</h2><span class="muted small">${secs.length} section${secs.length===1?"":"s"}, ${reviewed} reviewed in a meeting, ${docs.length} document${docs.length===1?"":"s"}</span></div>
@@ -632,7 +633,7 @@ function sectionCard(ws, c, title){
       <div class="sec-docs">${docs.length ? Object.keys(bySub).sort().map(sub => `${sub?`<h4>${esc(sub)}</h4>`:""}${bySub[sub].map(d=>`<div class="doc-row"><span class="docicon small"></span><div class="t">${docRow(d)}</div></div>`).join("")}`).join("") : `<p class="small muted" style="margin:0">No documents yet.</p>`}</div>
       <div class="row" style="margin-top:auto;padding-top:8px;border-top:1px solid var(--line)">
         <button class="btn sm" data-act="add-doc-in" data-ws="${ws}" data-cat="${esc(c)}">Add document</button>
-        <button class="btn sm" data-act="add-iface-in" data-ws="${ws}" data-cat="${esc(c)}">Add interface</button>
+        ${groupOf(ws, c) ? "" : `<button class="btn sm" data-act="add-iface-in" data-ws="${ws}" data-cat="${esc(c)}">Add interface</button>`}
       </div>
     </div></article>`;
 }
@@ -1022,19 +1023,38 @@ function ifaceForm(i){
     <div class="grid2"><div><label class="f" for="i_n">Interface name</label><input type="text" id="i_n" value="${esc(i.name)}"></div>
       <div><label class="f" for="i_st">Status</label><select id="i_st">${IFACE_STATUS.map(s=>`<option ${i.status===s?"selected":""}>${s}</option>`).join("")}</select></div></div>
     <div class="grid2"><div><label class="f" for="i_w">Workstream</label><select id="i_w">${Object.entries(WS).map(([k,v])=>`<option value="${k}" ${i.workstream===k?"selected":""}>${v.label}</option>`).join("")}</select></div>
-      <div><label class="f" for="i_c">Category (links documents and actions)</label><input type="text" id="i_c" list="catList" value="${esc(i.category)}"></div></div>
+      <div id="i_cwrap"><label class="f" for="i_c">Category (links documents and actions)</label><input type="text" id="i_c" list="catList" value="${esc(i.category)}"></div>
+      <div id="i_gwrap"><label class="f" for="i_g">Group</label><select id="i_g"></select></div></div>
     <div><label class="f" for="i_u">Claude artifact link</label><input type="url" id="i_u" value="${esc(i.artifactUrl)}" placeholder="https://claude.ai/artifact/..."></div>
     <div><label class="f" for="i_d">What it is for</label><textarea id="i_d" rows="2">${esc(i.description)}</textarea></div>
     ${assets ? `<div><label class="f">Preview image</label><div class="drop" id="drop" tabindex="0" role="button">${i.imageUrl?"Replace the preview: drop a screenshot or click to choose":"Drop a screenshot of the artifact, or click to choose"}<input type="file" id="file" accept="image/*" hidden></div><div id="i_info" class="small muted" style="margin-top:6px"></div></div>` : `<p class="small muted">Preview uploads are not available right now.</p>`}
     <datalist id="catList">${categories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>`,
     `${i.id?`<button class="btn danger" id="i_del">Delete</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="i_save">${i.id?"Save changes":"Add interface"}</button>`);
+  const curGroup = i.group || (groupOf(i.workstream, i.category)||{}).name || "";
+  const syncGroup = () => { const gs = groupsFor($("#i_w").value); $("#i_gwrap").style.display = gs.length ? "" : "none"; $("#i_cwrap").style.display = gs.length ? "none" : ""; $("#i_g").innerHTML = gs.map(g => `<option ${g.name===curGroup?"selected":""}>${esc(g.name)}</option>`).join(""); };
+  syncGroup(); $("#i_w").onchange = syncGroup;
   let img = {imageUrl:i.imageUrl||"", assetId:i.assetId||""};
   if (assets) wireDrop($("#drop"), $("#file"), async f => { if (!f) return; $("#i_info").innerHTML = `<span class="spinner"></span> Uploading`; try { const r = await assets.upload(f); img = {imageUrl:r.url, assetId:r.id}; $("#i_info").textContent = "Preview uploaded. Save to keep it."; } catch(e){ $("#i_info").textContent = "Upload failed. Use a PNG, JPG or WebP under 20 MB."; } });
   $("#i_save").onclick = async () => {
     const name = $("#i_n").value.trim(); if (!name) return toast("Name the interface first.");
-    const body = {...i, ...img, name, status:$("#i_st").value, workstream:$("#i_w").value, category:$("#i_c").value.trim(), artifactUrl:$("#i_u").value.trim(), description:$("#i_d").value.trim()};
+    const ws = $("#i_w").value, gs = groupsFor(ws), grp = gs.length ? $("#i_g").value : "";
+    const category = grp ? name : $("#i_c").value.trim();
+    const body = {...i, ...img, name, status:$("#i_st").value, workstream:ws, category, artifactUrl:$("#i_u").value.trim(), description:$("#i_d").value.trim()};
+    delete body.group;
     const id = i.id || uid("ifc"); delete body.id; if (body.order==null) body.order = S.interfaces.length;
-    if (await write("interfaces", id, body)) { closeModal(); toast("Interface saved"); }
+    if (!await write("interfaces", id, body)) return;
+    if (grp) {
+      // keep the group structure in step: the interface is its own card inside its group
+      const old = i.category;
+      const groups = JSON.parse(JSON.stringify({...DEFAULT_GROUPS, ...(S.groups||{})}));
+      groups[ws] = (groups[ws]||[]).map(g => ({...g, sections:(g.sections||[]).filter(x => x!==old && x!==category)}));
+      const tg = groups[ws].find(g => g.name===grp); if (tg) tg.sections.push(category);
+      const secsAll = {...DEFAULT_SECTIONS, ...(S.structure||{})};
+      secsAll[ws] = (secsAll[ws]||[]).filter(x => x!==old && x!==category);
+      await write("settings", "structure", {sections:secsAll, groups});
+      if (old && old!==category) for (const coll of ["docs","actions","meetings"]) for (const r of S[coll].filter(x => x.category===old && x.workstream===ws)) await write(coll, r.id, {category}, true);
+    }
+    closeModal(); toast("Interface saved");
   };
   if (i.id) $("#i_del").onclick = async () => { if (confirm("Remove this interface from the dashboard?")) { if (await remove("interfaces", i.id)) { closeModal(); toast("Interface removed"); } } };
 }
@@ -1094,7 +1114,7 @@ function addSection(ws){
     const all = {...DEFAULT_SECTIONS, ...(S.structure||{})};
     if ((all[ws]||[]).includes(n)) return toast("That section already exists.");
     all[ws] = [...(all[ws]||[]), n];
-    if (await write("settings", "structure", {sections: all, ...(S.groups ? {groups: S.groups} : {})})) { closeModal(); toast("Section added"); }
+    if (await write("settings", "structure", {sections: all, groups: {...DEFAULT_GROUPS, ...(S.groups||{})}})) { closeModal(); toast("Section added"); }
   };
 }
 /* ---------- modal ---------- */
@@ -1129,6 +1149,7 @@ function bind(root){
       case "add-doc-in": docForm({workstream:el.dataset.ws, category:el.dataset.cat, kind:"Review document"}); break;
       case "add-iface-in": ifaceForm({workstream:el.dataset.ws, category:el.dataset.cat, status:"Concept", name:""}); break;
       case "add-section": addSection(el.dataset.ws); break;
+      case "add-iface-group": ifaceForm({workstream:el.dataset.ws, group:el.dataset.group, status:"Concept", name:""}); break;
       case "edit-iface": ifaceForm(find("interfaces")); break;
       case "add-gtm": gtmForm(); break;
       case "edit-gtm": gtmForm(find("gtm")); break;
