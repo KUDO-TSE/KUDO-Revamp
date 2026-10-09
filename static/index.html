@@ -211,6 +211,12 @@ label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin
 .group-block{border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;margin:0 0 18px;background:color-mix(in srgb, var(--c) 5%, transparent)}
 .group-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin-bottom:12px}
 .group-head h3{font-size:1.1rem}
+.prevbox{aspect-ratio:16/9;max-height:220px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);display:grid;place-items:center;overflow:hidden;color:var(--muted);font-size:.86rem}
+.prevbox img{width:100%;height:100%;object-fit:contain}
+.drop.need{border-color:var(--bad);background:var(--bad-soft)}
+.shot.addprev{cursor:pointer;border:2px dashed var(--line);background:var(--sunk);color:var(--muted);text-align:center;font-size:.86rem;line-height:1.5}
+.shot.addprev:hover,.shot.addprev:focus-visible,.shot.addprev.over{border-color:var(--signal);color:var(--text)}
+.shot.addprev b{color:var(--ink)}
 .itiles{display:flex;flex-direction:column;gap:10px}
 .itile{display:grid;grid-template-columns:116px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:8px}
 .itile .shot{aspect-ratio:16/10;border:1px solid var(--line);border-radius:6px}
@@ -616,9 +622,10 @@ function vProjectBody(wss){
     </section>`;
   }).join("")}`;
 }
+const addPreview = i => `<button class="shot none addprev" data-act="upload-preview" data-id="${esc(i.id)}"><span><b>Add a preview</b><br>Click, drop or paste a screenshot</span></button>`;
 function ifaceTile(i){
   return `<div class="itile">
-    ${i.imageUrl ? `<button class="shot" data-zoom="${esc(i.imageUrl)}" aria-label="Enlarge ${esc(i.name)} preview"><img src="${esc(i.imageUrl)}" alt="${esc(i.name)} preview" loading="lazy"></button>` : `<div class="shot none">No preview</div>`}
+    ${i.imageUrl ? `<button class="shot" data-zoom="${esc(i.imageUrl)}" aria-label="Enlarge ${esc(i.name)} preview"><img src="${esc(i.imageUrl)}" alt="${esc(i.name)} preview" loading="lazy"></button>` : addPreview(i)}
     <div class="itile-b"><div class="row" style="gap:6px"><b>${esc(i.name)}</b>${ifaceStatusChip(i)}</div>
       ${i.description?`<div class="small muted">${esc(i.description)}</div>`:""}
       <div class="row" style="gap:4px">${i.artifactUrl?`<a class="btn sm primary" href="${esc(i.artifactUrl)}" target="_blank" rel="noopener">Open</a>`:""}<button class="btn sm ghost" data-act="edit-iface" data-id="${esc(i.id)}">Edit</button></div></div>
@@ -633,7 +640,7 @@ function sectionCard(ws, c, title){
   const bySub = {}; docs.forEach(d => (bySub[d.subcategory||""] ||= []).push(d));
   const open = S.actions.filter(a => a.category===c && (!a.workstream || a.workstream===ws) && a.status!=="done").length;
   const meets = S.meetings.filter(m => m.workstream===ws && m.category===c);
-  const head = one ? (one.imageUrl ? `<button class="shot" data-zoom="${esc(one.imageUrl)}" aria-label="Enlarge ${esc(one.name)} preview"><img src="${esc(one.imageUrl)}" alt="${esc(one.name)} preview" loading="lazy"></button>` : `<div class="shot none">No interface preview yet</div>`)
+  const head = one ? (one.imageUrl ? `<button class="shot" data-zoom="${esc(one.imageUrl)}" aria-label="Enlarge ${esc(one.name)} preview"><img src="${esc(one.imageUrl)}" alt="${esc(one.name)} preview" loading="lazy"></button>` : addPreview(one))
     : ifs.length ? "" : `<div class="shot none">No interface preview yet</div>`;
   return `<article class="icard">
     ${head}
@@ -1039,16 +1046,30 @@ function ifaceForm(i){
       <div id="i_gwrap"><label class="f" for="i_g">Group</label><select id="i_g"></select></div></div>
     <div><label class="f" for="i_u">Claude artifact link</label><input type="url" id="i_u" value="${esc(i.artifactUrl)}" placeholder="https://claude.ai/artifact/..."></div>
     <div><label class="f" for="i_d">What it is for</label><textarea id="i_d" rows="2">${esc(i.description)}</textarea></div>
-    ${assets ? `<div><label class="f">Preview image</label><div class="drop" id="drop" tabindex="0" role="button">${i.imageUrl?"Replace the preview: drop a screenshot or click to choose":"Drop a screenshot of the artifact, or click to choose"}<input type="file" id="file" accept="image/*" hidden></div><div id="i_info" class="small muted" style="margin-top:6px"></div></div>` : `<p class="small muted">Preview uploads are not available right now.</p>`}
+    <div><label class="f">Preview image (required)</label>
+      <div id="i_prev" class="prevbox">${i.imageUrl ? `<img src="${esc(i.imageUrl)}" alt="Current preview">` : `<span>No preview yet</span>`}</div>
+      <div class="drop" id="drop" tabindex="0" role="button" style="margin-top:8px">Paste a screenshot (Ctrl+V), drop it here, or click to choose a file<input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden></div>
+      <div id="i_info" class="small muted" style="margin-top:6px"></div></div>
     <datalist id="catList">${categories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>`,
     `${i.id?`<button class="btn danger" id="i_del">Delete</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="i_save">${i.id?"Save changes":"Add interface"}</button>`);
   const curGroup = i.group || (groupOf(i.workstream, i.category)||{}).name || "";
   const syncGroup = () => { const gs = groupsFor($("#i_w").value); $("#i_gwrap").style.display = gs.length ? "" : "none"; $("#i_cwrap").style.display = gs.length ? "none" : ""; $("#i_g").innerHTML = gs.map(g => `<option ${g.name===curGroup?"selected":""}>${esc(g.name)}</option>`).join(""); };
   syncGroup(); $("#i_w").onchange = syncGroup;
   let img = {imageUrl:i.imageUrl||"", assetId:i.assetId||""};
-  if (assets) wireDrop($("#drop"), $("#file"), async f => { if (!f) return; $("#i_info").innerHTML = `<span class="spinner"></span> Uploading`; try { const r = await assets.upload(f); img = {imageUrl:r.url, assetId:r.id}; $("#i_info").textContent = "Preview uploaded. Save to keep it."; } catch(e){ $("#i_info").textContent = "Upload failed. Use a PNG, JPG or WebP under 20 MB."; } });
+  let uploading = false;
+  const onImage = async f => {
+    if (!f || !/^image\/(png|jpe?g|gif|webp)$/.test(f.type)) { $("#i_info").textContent = "Use a PNG, JPG, GIF or WebP screenshot."; return; }
+    uploading = true; $("#i_save").disabled = true; $("#i_info").innerHTML = `<span class="spinner"></span> Uploading the preview`;
+    try { const r = await assets.upload(f); img = {imageUrl:r.url, assetId:r.id}; $("#i_prev").innerHTML = `<img src="${esc(r.url)}" alt="New preview">`; $("#i_info").textContent = "Preview ready. Save to keep it."; $("#drop").classList.remove("need"); }
+    catch(e){ $("#i_info").textContent = "Upload failed. Use an image under 10 MB and try again."; }
+    finally { uploading = false; $("#i_save").disabled = false; }
+  };
+  wireDrop($("#drop"), $("#file"), onImage);
+  $("#modal").onpaste = e => { const it = [...(e.clipboardData?.items||[])].find(x => x.type.startsWith("image/")); if (it) { e.preventDefault(); onImage(it.getAsFile()); } };
   $("#i_save").onclick = async () => {
     const name = $("#i_n").value.trim(); if (!name) return toast("Name the interface first.");
+    if (uploading) return toast("Wait for the preview to finish uploading.");
+    if (!img.imageUrl) { $("#drop").classList.add("need"); $("#i_info").textContent = "Add a screenshot of the interface before saving: paste it, drop it or choose a file."; return; }
     const ws = $("#i_w").value, gs = groupsFor(ws), grp = gs.length ? $("#i_g").value : "";
     const category = grp ? name : $("#i_c").value.trim();
     const body = {...i, ...img, name, status:$("#i_st").value, workstream:ws, category, artifactUrl:$("#i_u").value.trim(), description:$("#i_d").value.trim()};
@@ -1129,6 +1150,18 @@ function addSection(ws){
     if (await write("settings", "structure", {sections: all, groups: {...DEFAULT_GROUPS, ...(S.groups||{})}})) { closeModal(); toast("Section added"); }
   };
 }
+async function setPreview(id, f){
+  if (!f || !/^image\/(png|jpe?g|gif|webp)$/.test(f.type)) return toast("Use a PNG, JPG, GIF or WebP screenshot.");
+  toast("Uploading the preview");
+  try { const r = await assets.upload(f); if (await write("interfaces", id, {imageUrl:r.url, assetId:r.id}, true)) toast("Preview added"); }
+  catch(e){ toast("Upload failed. Use an image under 10 MB and try again."); }
+}
+let previewTarget = null;
+document.addEventListener("paste", e => {
+  if ($("#modal").open || !previewTarget) return;
+  const it = [...(e.clipboardData?.items||[])].find(x => x.type.startsWith("image/"));
+  if (it) { e.preventDefault(); setPreview(previewTarget, it.getAsFile()); }
+});
 /* ---------- modal ---------- */
 function openModal(title, body, foot){
   const m = $("#modal");
@@ -1136,7 +1169,7 @@ function openModal(title, body, foot){
   m.querySelectorAll("[data-close]").forEach(b => b.onclick = closeModal);
   if (!m.open) m.showModal();
 }
-function closeModal(){ const m=$("#modal"); if (m.open) m.close(); }
+function closeModal(){ const m=$("#modal"); m.onpaste = null; if (m.open) m.close(); }
 $("#lightbox").onclick = () => $("#lightbox").classList.remove("open");
 document.addEventListener("keydown", e => { if (e.key==="Escape") $("#lightbox").classList.remove("open"); });
 
@@ -1161,6 +1194,7 @@ function bind(root){
       case "add-doc-in": docForm({workstream:el.dataset.ws, category:el.dataset.cat, kind:"Review document"}); break;
       case "add-iface-in": ifaceForm({workstream:el.dataset.ws, category:el.dataset.cat, status:"Concept", name:""}); break;
       case "add-section": addSection(el.dataset.ws); break;
+      case "upload-preview": { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/png,image/jpeg,image/gif,image/webp"; inp.onchange = () => setPreview(id, inp.files[0]); inp.click(); break; }
       case "add-iface-group": ifaceForm({workstream:el.dataset.ws, group:el.dataset.group, status:"Concept", name:""}); break;
       case "edit-iface": ifaceForm(find("interfaces")); break;
       case "add-gtm": gtmForm(); break;
@@ -1175,6 +1209,14 @@ function bind(root){
   root.querySelectorAll("[data-af-sel]").forEach(el => el.onchange = () => { UI.af[el.dataset.afSel] = el.value; render(); });
   const q = root.querySelector("[data-af-q]");
   if (q) q.oninput = () => { UI.af.q = q.value; clearTimeout(bind._q); bind._q = setTimeout(() => { render(); const n=$("[data-af-q]"); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length);} }, 250); };
+  root.querySelectorAll(".addprev").forEach(el => {
+    const id = el.dataset.id;
+    el.onmouseenter = el.onfocus = () => { previewTarget = id; };
+    el.onmouseleave = el.onblur = () => { if (previewTarget === id) previewTarget = null; };
+    el.ondragover = e => { e.preventDefault(); el.classList.add("over"); };
+    el.ondragleave = () => el.classList.remove("over");
+    el.ondrop = e => { e.preventDefault(); el.classList.remove("over"); setPreview(id, e.dataTransfer.files[0]); };
+  });
   root.querySelectorAll("[data-zoom]").forEach(el => el.onclick = () => { const lb=$("#lightbox"); lb.querySelector("img").src = el.dataset.zoom; lb.classList.add("open"); });
   root.querySelectorAll("[data-dept]").forEach(el => el.onclick = () => { if (el.dataset.track) { UI.track = el.dataset.track; UI.scrollTo = "gtm-board"; } UI.dept = el.dataset.dept; render(); });
   root.querySelectorAll("header[data-track]").forEach(el => { const f = () => { if (UI.track !== el.dataset.track) { UI.track = el.dataset.track; UI.dept = "__all"; } render(); }; el.onclick = f; el.onkeydown = e => { if (e.key==="Enter"||e.key===" ") { e.preventDefault(); f(); } }; });
