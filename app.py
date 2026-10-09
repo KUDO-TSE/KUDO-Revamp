@@ -312,6 +312,113 @@ def get_file(fid):
     return resp
 
 
+# ------------------------------------------------------- preview capture
+class CaptureError(Exception):
+    def __init__(self, message, needs_html=False):
+        super().__init__(message)
+        self.needs_html = needs_html
+
+
+def _is_private_host(host):
+    import ipaddress
+    import socket
+    if os.environ.get("ALLOW_PRIVATE_PREVIEW") == "1":
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return True
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return True
+    return False
+
+
+def capture_preview(url=None, html=None):
+    """Open the interface in a headless browser and return a JPEG of what it shows.
+
+    A claude.ai artifact page shows the artifact inside a frame; when that frame fills most of
+    the page, only the frame is captured. Requests to private network addresses are blocked.
+    """
+    from urllib.parse import urlparse
+    from playwright.sync_api import sync_playwright
+
+    if url:
+        u = urlparse(url)
+        if u.scheme not in ("http", "https") or not u.hostname or _is_private_host(u.hostname):
+            raise CaptureError("That link cannot be opened. Use a full https:// link.")
+    cache = {}
+
+    def guard(route):
+        host = urlparse(route.request.url).hostname
+        if route.request.url.startswith(("data:", "blob:", "about:")) or not host:
+            return route.continue_()
+        if host not in cache:
+            cache[host] = _is_private_host(host)
+        return route.abort() if cache[host] else route.continue_()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+        try:
+            page = browser.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=False).new_page()
+            page.route("**/*", guard)
+            try:
+                if url:
+                    page.goto(url, wait_until="networkidle", timeout=35000)
+                else:
+                    page.set_content(html, wait_until="networkidle", timeout=35000)
+            except Exception:
+                pass  # pages that keep a connection open never reach "networkidle": capture what is there
+            page.wait_for_timeout(2500)
+            if url:
+                final = urlparse(page.url)
+                body = (page.inner_text("body") or "")[:4000].lower()
+                login_wall = ("/login" in final.path or "continue with google" in body
+                              or "continue with email" in body or ("log in" in body and "claude" in (final.hostname or "")))
+                if login_wall:
+                    raise CaptureError("This artifact is only visible to signed-in KUDO users, so the server cannot open it. "
+                                       "Download its HTML file from Claude and drop it here instead.", needs_html=True)
+            target = None
+            for frame in page.query_selector_all("iframe"):
+                box = frame.bounding_box()
+                if box and box["width"] * box["height"] > 0.45 * 1440 * 900:
+                    target = frame
+                    break
+            shot = (target or page).screenshot(type="jpeg", quality=80)
+        finally:
+            browser.close()
+    return shot
+
+
+@app.post("/api/preview")
+@login_required(api=True)
+def preview():
+    html_file = request.files.get("html")
+    try:
+        if html_file:
+            raw = html_file.read()
+            if len(raw) > 16 * 1024 * 1024:
+                return jsonify(error="The HTML file must be under 16 MB"), 413
+            shot = capture_preview(html=raw.decode("utf-8", errors="replace"))
+        else:
+            url = ((request.get_json(silent=True) or {}).get("url") or "").strip()
+            if not url:
+                return jsonify(error="Add the artifact link first"), 400
+            shot = capture_preview(url=url)
+    except CaptureError as exc:
+        return jsonify(error=str(exc), needsHtml=exc.needs_html), 422
+    except ImportError:
+        return jsonify(error="Automatic previews are not installed on this server yet."), 503
+    except Exception as exc:
+        app.logger.warning("Preview capture failed: %s", exc)
+        return jsonify(error="The interface could not be captured. Try again, or add a screenshot.", needsHtml=True), 502
+    fid = uuid.uuid4().hex
+    q("INSERT INTO files (id,content_type,data,created_at,created_by) VALUES (?,?,?,?,?)",
+      (fid, "image/jpeg", shot, time.time(), current_user()))
+    return jsonify(id=fid, url=f"/files/{fid}")
+
+
 # ---------------------------------------------------------- import/export
 @app.get("/api/export")
 @login_required(api=True)

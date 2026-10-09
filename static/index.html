@@ -622,7 +622,7 @@ function vProjectBody(wss){
     </section>`;
   }).join("")}`;
 }
-const addPreview = i => `<button class="shot none addprev" data-act="upload-preview" data-id="${esc(i.id)}"><span><b>Add a preview</b><br>Click, drop or paste a screenshot</span></button>`;
+const addPreview = i => `<button class="shot none addprev" data-act="upload-preview" data-id="${esc(i.id)}"><span><b>Add a preview</b><br>${i.artifactUrl ? "Click to capture it from the artifact link" : "Click, drop or paste a screenshot"}</span></button>`;
 function ifaceTile(i){
   return `<div class="itile">
     ${i.imageUrl ? `<button class="shot" data-zoom="${esc(i.imageUrl)}" aria-label="Enlarge ${esc(i.name)} preview"><img src="${esc(i.imageUrl)}" alt="${esc(i.name)} preview" loading="lazy"></button>` : addPreview(i)}
@@ -1048,7 +1048,8 @@ function ifaceForm(i){
     <div><label class="f" for="i_d">What it is for</label><textarea id="i_d" rows="2">${esc(i.description)}</textarea></div>
     <div><label class="f">Preview image (required)</label>
       <div id="i_prev" class="prevbox">${i.imageUrl ? `<img src="${esc(i.imageUrl)}" alt="Current preview">` : `<span>No preview yet</span>`}</div>
-      <div class="drop" id="drop" tabindex="0" role="button" style="margin-top:8px">Paste a screenshot (Ctrl+V), drop it here, or click to choose a file<input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm primary" type="button" id="i_cap">Capture from the artifact link</button><span class="small muted">or</span></div>
+      <div class="drop" id="drop" tabindex="0" role="button" style="margin-top:8px">Drop the artifact's .html file or a screenshot here, paste with Ctrl+V, or click to choose<input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp,.html,.htm,text/html" hidden></div>
       <div id="i_info" class="small muted" style="margin-top:6px"></div></div>
     <datalist id="catList">${categories().map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>`,
     `${i.id?`<button class="btn danger" id="i_del">Delete</button><span class="spacer"></span>`:""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="i_save">${i.id?"Save changes":"Add interface"}</button>`);
@@ -1057,19 +1058,30 @@ function ifaceForm(i){
   syncGroup(); $("#i_w").onchange = syncGroup;
   let img = {imageUrl:i.imageUrl||"", assetId:i.assetId||""};
   let uploading = false;
+  const busy = (on, msg) => { uploading = on; $("#i_save").disabled = on; $("#i_cap").disabled = on; if (msg) $("#i_info").innerHTML = msg; };
+  const got = r => { img = {imageUrl:r.url, assetId:r.id}; $("#i_prev").innerHTML = `<img src="${esc(r.url)}" alt="New preview">`; $("#i_info").textContent = "Preview ready. Save to keep it."; $("#drop").classList.remove("need"); };
   const onImage = async f => {
-    if (!f || !/^image\/(png|jpe?g|gif|webp)$/.test(f.type)) { $("#i_info").textContent = "Use a PNG, JPG, GIF or WebP screenshot."; return; }
-    uploading = true; $("#i_save").disabled = true; $("#i_info").innerHTML = `<span class="spinner"></span> Uploading the preview`;
-    try { const r = await assets.upload(f); img = {imageUrl:r.url, assetId:r.id}; $("#i_prev").innerHTML = `<img src="${esc(r.url)}" alt="New preview">`; $("#i_info").textContent = "Preview ready. Save to keep it."; $("#drop").classList.remove("need"); }
-    catch(e){ $("#i_info").textContent = "Upload failed. Use an image under 10 MB and try again."; }
-    finally { uploading = false; $("#i_save").disabled = false; }
+    if (!f) return;
+    busy(true, `<span class="spinner"></span> ${isHtml(f) ? "Opening the interface and taking a screenshot" : "Uploading the preview"}`);
+    try { got(await previewFromFile(f)); } catch(e){ $("#i_info").textContent = e.message || "Upload failed. Try again."; }
+    finally { busy(false); }
   };
+  const captureLink = async () => {
+    const u = $("#i_u").value.trim();
+    if (!u) { $("#i_info").textContent = "Add the artifact link first, or drop a screenshot."; return false; }
+    busy(true, `<span class="spinner"></span> Opening the artifact and taking a screenshot (up to 30 seconds)`);
+    try { got(await capturePreview(u)); return true; }
+    catch(e){ $("#i_info").textContent = e.message; $("#drop").classList.add("need"); return false; }
+    finally { busy(false); }
+  };
+  $("#i_cap").onclick = captureLink;
   wireDrop($("#drop"), $("#file"), onImage);
   $("#modal").onpaste = e => { const it = [...(e.clipboardData?.items||[])].find(x => x.type.startsWith("image/")); if (it) { e.preventDefault(); onImage(it.getAsFile()); } };
   $("#i_save").onclick = async () => {
     const name = $("#i_n").value.trim(); if (!name) return toast("Name the interface first.");
     if (uploading) return toast("Wait for the preview to finish uploading.");
-    if (!img.imageUrl) { $("#drop").classList.add("need"); $("#i_info").textContent = "Add a screenshot of the interface before saving: paste it, drop it or choose a file."; return; }
+    if (!img.imageUrl && $("#i_u").value.trim()) await captureLink();
+    if (!img.imageUrl) { $("#drop").classList.add("need"); if (!$("#i_u").value.trim()) $("#i_info").textContent = "Add the artifact link so the preview can be captured, or drop a screenshot."; return; }
     const ws = $("#i_w").value, gs = groupsFor(ws), grp = gs.length ? $("#i_g").value : "";
     const category = grp ? name : $("#i_c").value.trim();
     const body = {...i, ...img, name, status:$("#i_st").value, workstream:ws, category, artifactUrl:$("#i_u").value.trim(), description:$("#i_d").value.trim()};
@@ -1150,11 +1162,36 @@ function addSection(ws){
     if (await write("settings", "structure", {sections: all, groups: {...DEFAULT_GROUPS, ...(S.groups||{})}})) { closeModal(); toast("Section added"); }
   };
 }
+const isHtml = f => f && (/\.html?$/i.test(f.name) || f.type === "text/html");
+const isImg = f => f && /^image\/(png|jpe?g|gif|webp)$/.test(f.type);
+async function capturePreview(src){
+  // src = artifact link (string) or an HTML file: the server opens it and screenshots it
+  let r;
+  if (typeof src === "string") r = await fetch("/api/preview", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify({url:src})});
+  else { const fd = new FormData(); fd.append("html", src); r = await fetch("/api/preview", {method:"POST", credentials:"same-origin", body:fd}); }
+  let j = {}; try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw {message: j.error || "The interface could not be captured.", needsHtml: !!j.needsHtml};
+  return j;
+}
+async function previewFromFile(f){
+  if (isHtml(f)) return capturePreview(f);
+  if (isImg(f)) return assets.upload(f);
+  throw {message:"Use a screenshot (PNG, JPG, GIF, WebP) or the artifact's .html file."};
+}
 async function setPreview(id, f){
-  if (!f || !/^image\/(png|jpe?g|gif|webp)$/.test(f.type)) return toast("Use a PNG, JPG, GIF or WebP screenshot.");
-  toast("Uploading the preview");
-  try { const r = await assets.upload(f); if (await write("interfaces", id, {imageUrl:r.url, assetId:r.id}, true)) toast("Preview added"); }
-  catch(e){ toast("Upload failed. Use an image under 10 MB and try again."); }
+  toast(isHtml(f) ? "Capturing the interface" : "Uploading the preview");
+  try { const r = await previewFromFile(f); if (await write("interfaces", id, {imageUrl:r.url, assetId:r.id}, true)) toast("Preview added"); }
+  catch(e){ toast(e.message || "Upload failed. Try again."); }
+}
+async function autoPreview(id){
+  const i = S.interfaces.find(x => x.id === id);
+  if (i?.artifactUrl) {
+    toast("Capturing the interface from its link");
+    try { const r = await capturePreview(i.artifactUrl); if (await write("interfaces", id, {imageUrl:r.url, assetId:r.id}, true)) { toast("Preview captured"); return; } }
+    catch(e){ toast(e.message); }
+  }
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/png,image/jpeg,image/gif,image/webp,.html,.htm,text/html";
+  inp.onchange = () => setPreview(id, inp.files[0]); inp.click();
 }
 let previewTarget = null;
 document.addEventListener("paste", e => {
@@ -1194,7 +1231,7 @@ function bind(root){
       case "add-doc-in": docForm({workstream:el.dataset.ws, category:el.dataset.cat, kind:"Review document"}); break;
       case "add-iface-in": ifaceForm({workstream:el.dataset.ws, category:el.dataset.cat, status:"Concept", name:""}); break;
       case "add-section": addSection(el.dataset.ws); break;
-      case "upload-preview": { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/png,image/jpeg,image/gif,image/webp"; inp.onchange = () => setPreview(id, inp.files[0]); inp.click(); break; }
+      case "upload-preview": autoPreview(id); break;
       case "add-iface-group": ifaceForm({workstream:el.dataset.ws, group:el.dataset.group, status:"Concept", name:""}); break;
       case "edit-iface": ifaceForm(find("interfaces")); break;
       case "add-gtm": gtmForm(); break;
