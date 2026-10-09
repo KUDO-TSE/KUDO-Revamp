@@ -339,7 +339,7 @@ const trackOf = g => g.track === "backend" ? "backend" : "interfaces";
 const IFACE_STATUS = ["Concept","In design","In review","Approved","In build","Released"];
 const S = {docs:[],actions:[],meetings:[],interfaces:[],gtm:[],status:null,team:[],loaded:false};
 const UI = {view:"status", scrollTo:null, af:{status:"open",owner:"",ws:"",cat:"",q:"",group:"owner"}, meeting:null, dept:"Sales", track:"interfaces"};
-let db=null, sample=null, assets=null, readOnly=false, dbState="loading";
+let STORAGE_TEMP=false; let db=null, sample=null, assets=null, readOnly=false, dbState="loading";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -467,7 +467,8 @@ function render(){
   renderNav();
   const m = $("#main");
   let banner = "";
-  if (dbState==="offline") banner = `<div class="banner">The dashboard server could not be reached. Check your connection and reload the page.</div>`;
+  if (STORAGE_TEMP) banner += `<div class="banner" style="background:var(--bad-soft);border-color:var(--bad)"><b>Changes are not being saved permanently.</b> The server has no database connected, so everything added here is deleted at the next deploy. In Railway, add the variable DATABASE_URL = \${{Postgres.DATABASE_URL}} on the web service, then redeploy.</div>`;
+  if (dbState==="offline") banner += `<div class="banner">The dashboard server could not be reached. Check your connection and reload the page.</div>`;
   if (dbState==="loading" && !S.loaded) { m.innerHTML = `<div class="empty"><span class="spinner"></span> Loading the program data</div>`; return; }
   const fn = {status:vStatus, project:vProject, actions:vActions, gtm:vGtm}[UI.view] || vStatus;
   m.innerHTML = banner + fn();
@@ -1186,6 +1187,7 @@ async function refreshAI(){
   try {
     const me = await api("GET", "/api/me");
     $("#whoami").textContent = "Signed in as " + me.name;
+    if (me.storageTemporary && !STORAGE_TEMP) { STORAGE_TEMP = true; render(); }
     sample = me.ai ? { json: async (prompt, opts={}) => (await api("POST", "/api/ai", {prompt, tier: opts.modelTier || "default"})).result } : null;
   } catch(e){}
   return !!sample;

@@ -43,6 +43,9 @@ app.config.update(
 
 # ---------------------------------------------------------------- database
 IS_PG = DATABASE_URL.startswith("postgres")
+ON_RAILWAY = any(os.environ.get(k) for k in ("RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID"))
+# On Railway the container disk is wiped at every deploy: without Postgres nothing survives.
+STORAGE_TEMPORARY = ON_RAILWAY and not IS_PG
 if IS_PG:
     import psycopg
 
@@ -199,7 +202,7 @@ def logout():
 # ------------------------------------------------------------------- pages
 @app.get("/healthz")
 def health():
-    return {"ok": True}
+    return {"ok": True, "storage": "postgres" if IS_PG else "temporary file", "permanent": IS_PG or not ON_RAILWAY}
 
 
 @app.get("/")
@@ -213,7 +216,7 @@ def index():
 @app.get("/api/me")
 @login_required(api=True)
 def me():
-    return jsonify(name=current_user(), ai=bool(ANTHROPIC_API_KEY))
+    return jsonify(name=current_user(), ai=bool(ANTHROPIC_API_KEY), storageTemporary=STORAGE_TEMPORARY)
 
 
 # ---------------------------------------------------------------- records
@@ -630,6 +633,11 @@ def run_migrations(payload):
         changed = True
     if changed:
         put_record("settings", "migrations", log, "Update")
+
+
+if STORAGE_TEMPORARY:
+    app.logger.error("NO DATABASE CONNECTED: DATABASE_URL is not set, data is kept in a temporary file "
+                     "that Railway deletes at every deploy. Add DATABASE_URL = ${{Postgres.DATABASE_URL}}.")
 
 
 def _startup():
