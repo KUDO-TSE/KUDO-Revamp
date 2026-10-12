@@ -217,6 +217,7 @@ label.f{display:block;font-size:.84rem;font-weight:600;color:var(--muted);margin
 .shot.addprev{cursor:pointer;border:2px dashed var(--line);background:var(--sunk);color:var(--muted);text-align:center;font-size:.86rem;line-height:1.5}
 .shot.addprev:hover,.shot.addprev:focus-visible,.shot.addprev.over{border-color:var(--signal);color:var(--text)}
 .shot.addprev b{color:var(--ink)}
+.shot.addprev.pending{cursor:progress;border-style:solid}
 .itiles{display:flex;flex-direction:column;gap:10px}
 .itile{display:grid;grid-template-columns:116px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:8px}
 .itile .shot{aspect-ratio:16/10;border:1px solid var(--line);border-radius:6px}
@@ -622,7 +623,13 @@ function vProjectBody(wss){
     </section>`;
   }).join("")}`;
 }
-const addPreview = i => `<button class="shot none addprev" data-act="upload-preview" data-id="${esc(i.id)}"><span><b>Add a preview</b><br>${i.artifactUrl ? "Click to capture it from the artifact link" : "Click, drop or paste a screenshot"}</span></button>`;
+const addPreview = i => {
+  const pending = i.artifactUrl && !i.previewError;
+  const msg = pending ? `<span class="spinner"></span><br><b>Capturing the preview</b><br>from the artifact link`
+    : i.previewError ? `<b>Add a preview</b><br>${esc(i.previewError.split(". ")[0])}.<br>Drop the artifact's HTML file or a screenshot here`
+    : `<b>Add a preview</b><br>Add the artifact link, or drop a screenshot here`;
+  return `<button class="shot none addprev ${pending?"pending":""}" data-act="upload-preview" data-id="${esc(i.id)}"><span>${msg}</span></button>`;
+};
 function ifaceTile(i){
   return `<div class="itile">
     ${i.imageUrl ? `<button class="shot" data-zoom="${esc(i.imageUrl)}" aria-label="Enlarge ${esc(i.name)} preview"><img src="${esc(i.imageUrl)}" alt="${esc(i.name)} preview" loading="lazy"></button>` : addPreview(i)}
@@ -1185,7 +1192,8 @@ async function setPreview(id, f){
 }
 async function autoPreview(id){
   const i = S.interfaces.find(x => x.id === id);
-  if (i?.artifactUrl) {
+  if (i?.artifactUrl && !i.previewError) { toast("The preview is being captured. It appears here in a moment."); return; }
+  if (false) {
     toast("Capturing the interface from its link");
     try { const r = await capturePreview(i.artifactUrl); if (await write("interfaces", id, {imageUrl:r.url, assetId:r.id}, true)) { toast("Preview captured"); return; } }
     catch(e){ toast(e.message); }
@@ -1285,6 +1293,8 @@ render();
   } catch(e){}
   await poll();
   setInterval(poll, 8000);
+  // ask the server to fill any preview still missing (for example interfaces saved before automatic previews existed)
+  if (S.interfaces.some(i => i.artifactUrl && !i.imageUrl && !i.previewError)) api("POST", "/api/previews/fill", {}).catch(()=>{});
   document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
 })();
 })();

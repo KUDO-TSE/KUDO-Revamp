@@ -254,7 +254,12 @@ def put(col, rid):
     existing = get_record(col, rid)
     if existing is None and "createdBy" not in data:
         data["createdBy"] = current_user()
+    if col == "interfaces" and existing and existing.get("artifactUrl") != data.get("artifactUrl"):
+        data.pop("previewError", None)
+        data.pop("previewFailedFor", None)
     ua = put_record(col, rid, data, current_user())
+    if col == "interfaces" and _needs_preview(data):
+        queue_previews([rid])
     return jsonify(data=decorate(data, ua, current_user()))
 
 
@@ -268,8 +273,13 @@ def patch(col, rid):
     existing = get_record(col, rid)
     if existing is None:
         return jsonify(error="This item no longer exists. Reload the page."), 404
+    if col == "interfaces" and "artifactUrl" in data and data.get("artifactUrl") != existing.get("artifactUrl"):
+        existing.pop("previewError", None)
+        existing.pop("previewFailedFor", None)
     existing.update(strip_meta(data))
     ua = put_record(col, rid, existing, current_user())
+    if col == "interfaces" and _needs_preview(existing):
+        queue_previews([rid])
     return jsonify(data=decorate(existing, ua, current_user()))
 
 
@@ -389,6 +399,77 @@ def capture_preview(url=None, html=None):
         finally:
             browser.close()
     return shot
+
+
+# Background filling of missing previews: any interface with a link but no image gets one.
+_preview_lock = threading.Lock()
+_preview_queue = []
+_preview_worker = None
+
+
+def _store_capture(shot, user):
+    fid = uuid.uuid4().hex
+    q("INSERT INTO files (id,content_type,data,created_at,created_by) VALUES (?,?,?,?,?)",
+      (fid, "image/jpeg", shot, time.time(), user))
+    return fid
+
+
+def _needs_preview(rec):
+    return bool(rec and (rec.get("artifactUrl") or "").strip() and not rec.get("imageUrl")
+                and rec.get("previewFailedFor") != rec.get("artifactUrl"))
+
+
+def _preview_loop():
+    global _preview_worker
+    while True:
+        with _preview_lock:
+            if not _preview_queue:
+                _preview_worker = None
+                return
+            rid = _preview_queue.pop(0)
+        rec = get_record("interfaces", rid)
+        if not _needs_preview(rec):
+            continue
+        url = rec["artifactUrl"].strip()
+        try:
+            fid = _store_capture(capture_preview(url=url), "Automatic preview")
+            rec = get_record("interfaces", rid) or {}
+            if not rec.get("imageUrl"):
+                rec.update(imageUrl=f"/files/{fid}", assetId=fid)
+                rec.pop("previewError", None)
+                rec.pop("previewFailedFor", None)
+                put_record("interfaces", rid, rec, "Automatic preview")
+        except Exception as exc:
+            msg = str(exc) if isinstance(exc, CaptureError) else "The link could not be opened automatically."
+            if isinstance(exc, ImportError):
+                msg = "Automatic previews are not installed on this server yet."
+            app.logger.warning("Automatic preview failed for %s: %s", rid, exc)
+            rec = get_record("interfaces", rid) or {}
+            rec.update(previewError=msg, previewFailedFor=url)
+            put_record("interfaces", rid, rec, "Automatic preview")
+
+
+def queue_previews(ids):
+    global _preview_worker
+    with _preview_lock:
+        for rid in ids:
+            if rid not in _preview_queue:
+                _preview_queue.append(rid)
+        if _preview_worker is None and _preview_queue:
+            _preview_worker = threading.Thread(target=_preview_loop, daemon=True)
+            _preview_worker.start()
+
+
+def queue_missing_previews():
+    rows = q("SELECT id,data FROM records WHERE collection='interfaces' AND deleted=0", fetch=True)
+    queue_previews([rid for rid, data in rows if _needs_preview(json.loads(data))])
+
+
+@app.post("/api/previews/fill")
+@login_required(api=True)
+def fill_previews():
+    queue_missing_previews()
+    return jsonify(queued=len(_preview_queue))
 
 
 @app.post("/api/preview")
@@ -761,6 +842,9 @@ def _startup():
 
 try:
     _startup()
+    # one worker fills the missing previews after a deploy
+    if not IS_PG or q("SELECT pg_try_advisory_lock(424243)", fetch=True)[0][0]:
+        queue_missing_previews()
 except Exception as exc:  # never block startup on seeding
     app.logger.warning("Seeding skipped: %s", exc)
 
